@@ -2,7 +2,6 @@
 
 **Date:** 2026-04-11
 **Author:** Intelligence Officer
-**Audience:** Full team, presented at Monday mob session
 
 ---
 
