@@ -27,8 +27,11 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 
+import sqlite3
 import pymongo
 import duckdb
+import psycopg2
+import psycopg2.extras
 import yaml
 from dotenv import load_dotenv
 
@@ -77,24 +80,24 @@ TOOL_SCHEMAS: list[dict] = [
     },
     {
         "name": "query_postgres",
-        "description": "Run a SQL query against a PostgreSQL database. (PENDING — no DAB datasets loaded yet)",
+        "description": "Run a SQL query against a PostgreSQL database.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "db_name": {"type": "string"},
-                "sql":     {"type": "string"},
+                "db_name": {"type": "string", "description": "Logical DB name from db_config.yaml"},
+                "sql":     {"type": "string", "description": "SQL query to execute"},
             },
             "required": ["db_name", "sql"],
         },
     },
     {
         "name": "query_sqlite",
-        "description": "Run a SQL query against a SQLite database. (PENDING — no DAB datasets loaded yet)",
+        "description": "Run a SQL query against a SQLite database.",
         "inputSchema": {
             "type": "object",
             "properties": {
-                "db_name": {"type": "string"},
-                "sql":     {"type": "string"},
+                "db_name": {"type": "string", "description": "Logical DB name from db_config.yaml"},
+                "sql":     {"type": "string", "description": "SQL query to execute"},
             },
             "required": ["db_name", "sql"],
         },
@@ -103,8 +106,10 @@ TOOL_SCHEMAS: list[dict] = [
 
 # ── Connection registry — populated from db_config.yaml files ─────────────────
 
-_mongo_connections: dict[str, dict] = {}   # logical_name → {db_name, uri}
-_duckdb_connections: dict[str, str] = {}   # logical_name → abs_path
+_mongo_connections:    dict[str, dict] = {}   # logical_name → {db_name, uri}
+_duckdb_connections:   dict[str, str]  = {}   # logical_name → abs_path
+_sqlite_connections:   dict[str, str]  = {}   # logical_name → abs_path
+_postgres_connections: dict[str, dict] = {}   # logical_name → {db_name, host, port, user, password}
 
 
 def register_dataset(db_config_path: str) -> None:
@@ -121,8 +126,21 @@ def register_dataset(db_config_path: str) -> None:
             }
         elif db_type == "duckdb":
             _duckdb_connections[name] = str(base / details["db_path"])
-    logger.info("Registered dataset from %s: mongo=%s duckdb=%s",
-                cfg_path, list(_mongo_connections), list(_duckdb_connections))
+        elif db_type == "sqlite":
+            _sqlite_connections[name] = str(base / details["db_path"])
+        elif db_type in ("postgres", "postgresql"):
+            _postgres_connections[name] = {
+                "db_name":  details["db_name"],
+                "host":     os.getenv("PG_HOST",     "localhost"),
+                "port":     int(os.getenv("PG_PORT", "5432")),
+                "user":     os.getenv("PG_USER",     "oracle_forge"),
+                "password": os.getenv("PG_PASSWORD", "oracle_forge_pw"),
+            }
+    logger.info(
+        "Registered dataset from %s: mongo=%s duckdb=%s sqlite=%s postgres=%s",
+        cfg_path, list(_mongo_connections), list(_duckdb_connections),
+        list(_sqlite_connections), list(_postgres_connections),
+    )
 
 
 def _auto_register() -> None:
@@ -186,8 +204,39 @@ def _exec_duckdb(args: dict) -> dict:
         return {"success": False, "error": str(exc), "rows": 0, "data": []}
 
 
-def _exec_stub(db_type: str, args: dict) -> dict:
-    return {"success": False, "error": f"{db_type} not yet configured (PENDING — no DAB datasets loaded)"}
+def _exec_sqlite(args: dict) -> dict:
+    logical = args["db_name"]
+    if logical not in _sqlite_connections:
+        return {"success": False, "error": f"Unknown SQLite db_name '{logical}'. Available: {list(_sqlite_connections)}"}
+    try:
+        conn = sqlite3.connect(_sqlite_connections[logical])
+        conn.row_factory = sqlite3.Row
+        cur = conn.execute(args["sql"])
+        rows = [dict(r) for r in cur.fetchmany(MAX_ROWS)]
+        conn.close()
+        return {"success": True, "rows": len(rows), "data": rows}
+    except Exception as exc:
+        return {"success": False, "error": str(exc), "rows": 0, "data": []}
+
+
+def _exec_postgres(args: dict) -> dict:
+    logical = args["db_name"]
+    if logical not in _postgres_connections:
+        return {"success": False, "error": f"Unknown PostgreSQL db_name '{logical}'. Available: {list(_postgres_connections)}"}
+    cfg = _postgres_connections[logical]
+    try:
+        conn = psycopg2.connect(
+            host=cfg["host"], port=cfg["port"],
+            user=cfg["user"], password=cfg["password"],
+            dbname=cfg["db_name"],
+        )
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(args["sql"])
+        rows = [dict(r) for r in cur.fetchmany(MAX_ROWS)]
+        conn.close()
+        return {"success": True, "rows": len(rows), "data": rows}
+    except Exception as exc:
+        return {"success": False, "error": str(exc), "rows": 0, "data": []}
 
 
 # ── MCP dispatcher ────────────────────────────────────────────────────────────
@@ -197,10 +246,10 @@ def dispatch(tool_name: str, arguments: dict) -> Any:
         return _exec_mongodb(arguments)
     elif tool_name == "query_duckdb":
         return _exec_duckdb(arguments)
-    elif tool_name == "query_postgres":
-        return _exec_stub("PostgreSQL", arguments)
     elif tool_name == "query_sqlite":
-        return _exec_stub("SQLite", arguments)
+        return _exec_sqlite(arguments)
+    elif tool_name == "query_postgres":
+        return _exec_postgres(arguments)
     return {"success": False, "error": f"Unknown tool: {tool_name}"}
 
 
@@ -291,8 +340,10 @@ def main():
     _auto_register()
     server = HTTPServer(("127.0.0.1", port), MCPHandler)
     logger.info("Oracle Forge MCP server listening on http://127.0.0.1:%d/mcp", port)
-    logger.info("Mongo connections: %s", list(_mongo_connections))
-    logger.info("DuckDB connections: %s", list(_duckdb_connections))
+    logger.info("Mongo    connections: %s", list(_mongo_connections))
+    logger.info("DuckDB   connections: %s", list(_duckdb_connections))
+    logger.info("SQLite   connections: %s", list(_sqlite_connections))
+    logger.info("Postgres connections: %s", list(_postgres_connections))
     try:
         server.serve_forever()
     except KeyboardInterrupt:

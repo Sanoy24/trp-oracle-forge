@@ -18,6 +18,8 @@ from typing import Any
 import pymongo
 import duckdb
 import requests
+import psycopg2
+import psycopg2.extras
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -128,6 +130,54 @@ TOOLS = [
                     "db_name": {
                         "type": "string",
                         "description": "Logical database name from the DATABASE DESCRIPTION (e.g. 'user_database')"
+                    },
+                    "sql": {
+                        "type": "string",
+                        "description": "SQL query to execute"
+                    }
+                },
+                "required": ["db_name", "sql"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_sqlite",
+            "description": (
+                "Run a SQL query against a SQLite database. "
+                "Standard SQL — no analytical extensions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "db_name": {
+                        "type": "string",
+                        "description": "Logical database name from the DATABASE DESCRIPTION"
+                    },
+                    "sql": {
+                        "type": "string",
+                        "description": "SQL query to execute"
+                    }
+                },
+                "required": ["db_name", "sql"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_postgres",
+            "description": (
+                "Run a SQL query against a PostgreSQL database. "
+                "Supports standard SQL and PostgreSQL-specific functions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "db_name": {
+                        "type": "string",
+                        "description": "Logical database name from the DATABASE DESCRIPTION"
                     },
                     "sql": {
                         "type": "string",
@@ -256,6 +306,8 @@ def load_db_config(db_config_path: str) -> dict:
 
     mongo_dbs    = {}
     duckdb_paths = {}
+    sqlite_paths = {}
+    postgres_dbs = {}
 
     for logical_name, details in config.get("db_clients", {}).items():
         db_type = details.get("db_type", "")
@@ -265,17 +317,21 @@ def load_db_config(db_config_path: str) -> dict:
                 "uri":     os.getenv("MONGO_URI", "mongodb://localhost:27017/")
             }
         elif db_type == "duckdb":
-            # db_path in yaml is relative to the config file's directory
             duckdb_paths[logical_name] = str(base_dir / details["db_path"])
-        elif db_type in ("postgresql", "postgres"):
-            # Future: add PostgreSQL support here
-            logger.info("PostgreSQL connection for '%s' not yet implemented", logical_name)
         elif db_type == "sqlite":
-            # Future: add SQLite support here
-            logger.info("SQLite connection for '%s' not yet implemented", logical_name)
+            sqlite_paths[logical_name] = str(base_dir / details["db_path"])
+        elif db_type in ("postgres", "postgresql"):
+            postgres_dbs[logical_name] = {
+                "db_name":  details["db_name"],
+                "host":     os.getenv("PG_HOST",     "localhost"),
+                "port":     int(os.getenv("PG_PORT", "5432")),
+                "user":     os.getenv("PG_USER",     "oracle_forge"),
+                "password": os.getenv("PG_PASSWORD", "oracle_forge_pw"),
+            }
 
-    logger.info("Loaded config — mongo: %s, duckdb: %s", list(mongo_dbs), list(duckdb_paths))
-    return {"mongo": mongo_dbs, "duckdb": duckdb_paths}
+    logger.info("Loaded config — mongo: %s, duckdb: %s, sqlite: %s, postgres: %s",
+                list(mongo_dbs), list(duckdb_paths), list(sqlite_paths), list(postgres_dbs))
+    return {"mongo": mongo_dbs, "duckdb": duckdb_paths, "sqlite": sqlite_paths, "postgres": postgres_dbs}
 
 # ── Tool dispatcher ───────────────────────────────────────────────────────────
 
@@ -284,7 +340,7 @@ def dispatch_tool(tool_name: str, tool_args: dict, connections: dict) -> dict:
     if tool_name == "return_answer":
         return {"success": True, "answer": tool_args.get("answer", "")}
 
-    if tool_name in ("query_mongodb", "query_duckdb"):
+    if tool_name in ("query_mongodb", "query_duckdb", "query_sqlite", "query_postgres"):
         if not _probe_mcp():
             return {"success": False, "error": "MCP server is not available — harness should have started it"}
         result = _call_mcp(tool_name, tool_args)
