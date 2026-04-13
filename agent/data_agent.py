@@ -280,43 +280,19 @@ def load_db_config(db_config_path: str) -> dict:
 # ── Tool dispatcher ───────────────────────────────────────────────────────────
 
 def dispatch_tool(tool_name: str, tool_args: dict, connections: dict) -> dict:
-    """
-    Route a tool call to the correct database executor.
-
-    Priority:
-      1. Oracle Forge MCP server (mcp/toolbox_server.py) when running — this
-         is the standard interface the challenge requires.
-      2. Direct Python drivers (pymongo / duckdb) as fallback when the MCP
-         server is not available.
-    """
+    """Route a tool call through the MCP server (required)."""
     if tool_name == "return_answer":
         return {"success": True, "answer": tool_args.get("answer", "")}
 
-    # Attempt MCP route for DB tools
-    if tool_name in ("query_mongodb", "query_duckdb") and _probe_mcp():
+    if tool_name in ("query_mongodb", "query_duckdb"):
+        if not _probe_mcp():
+            return {"success": False, "error": "MCP server is not available — harness should have started it"}
         result = _call_mcp(tool_name, tool_args)
-        if result is not None:
-            return result
-        # MCP call failed — fall through to direct drivers below
+        if result is None:
+            return {"success": False, "error": f"MCP call to {tool_name} failed"}
+        return result
 
-    # Direct driver fallback
-    if tool_name == "query_mongodb":
-        logical = tool_args["db_name"]
-        if logical not in connections["mongo"]:
-            available = list(connections["mongo"].keys())
-            return {"success": False, "error": f"Unknown MongoDB db_name '{logical}'. Available: {available}"}
-        cfg = connections["mongo"][logical]
-        return execute_mongodb_query(tool_args, cfg["uri"], cfg["db_name"])
-
-    elif tool_name == "query_duckdb":
-        logical = tool_args["db_name"]
-        if logical not in connections["duckdb"]:
-            available = list(connections["duckdb"].keys())
-            return {"success": False, "error": f"Unknown DuckDB db_name '{logical}'. Available: {available}"}
-        return execute_duckdb_query(tool_args, connections["duckdb"][logical])
-
-    else:
-        return {"success": False, "error": f"Unknown tool: {tool_name}"}
+    return {"success": False, "error": f"Unknown tool: {tool_name}"}
 
 # ── Main agent ────────────────────────────────────────────────────────────────
 
