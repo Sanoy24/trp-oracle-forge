@@ -11,9 +11,12 @@ from __future__ import annotations
 import argparse
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
+import time
+import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -22,9 +25,64 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 EVAL_DIR = Path(__file__).resolve().parent
 AGENT_DIR = REPO_ROOT / "agent"
 CHILD_SCRIPT = EVAL_DIR / "agent_runner_child.py"
-DEFAULT_DAB = "/shared/DataAgentBench"
+DEFAULT_DAB = str(REPO_ROOT / "DataAgentBench")
 SCORE_LOG = EVAL_DIR / "score_log.json"
-QUERY_TIMEOUT_SEC = 120
+QUERY_TIMEOUT_SEC = 240
+MCP_SERVER_SCRIPT = REPO_ROOT / "mcp" / "toolbox_server.py"
+MCP_HEALTH_URL = os.getenv("MCP_URL", "http://127.0.0.1:5000/mcp").replace("/mcp", "/health")
+
+
+def _mcp_is_up() -> bool:
+    try:
+        with urllib.request.urlopen(MCP_HEALTH_URL, timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _start_mcp_server() -> Optional[subprocess.Popen]:
+    """
+    Start the MCP server as a background subprocess if it is not already running.
+    Returns the Popen handle so the caller can stop it, or None if it was already up.
+    Logs a warning and returns None if startup fails — agent falls back to direct drivers.
+    """
+    if _mcp_is_up():
+        print("[harness] MCP server already running.", flush=True)
+        return None
+
+    if not MCP_SERVER_SCRIPT.is_file():
+        raise RuntimeError(f"MCP server script not found at {MCP_SERVER_SCRIPT}")
+
+    print("[harness] Starting MCP server ...", flush=True)
+    proc = subprocess.Popen(
+        [sys.executable, str(MCP_SERVER_SCRIPT)],
+        cwd=str(REPO_ROOT),
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    deadline = time.monotonic() + 10
+    while time.monotonic() < deadline:
+        if _mcp_is_up():
+            print(f"[harness] MCP server ready (pid {proc.pid}).", flush=True)
+            return proc
+        if proc.poll() is not None:
+            raise RuntimeError("MCP server exited immediately on startup — check mcp/toolbox_server.py logs")
+        time.sleep(0.25)
+
+    proc.terminate()
+    raise RuntimeError("MCP server did not become ready within 10s")
+
+
+def _stop_mcp_server(proc: Optional[subprocess.Popen]) -> None:
+    if proc is None:
+        return
+    print(f"[harness] Stopping MCP server (pid {proc.pid}) ...", flush=True)
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
 
 
 def _ensure_import_paths() -> None:
@@ -217,72 +275,76 @@ def run_harness(
     results: List[Dict[str, Any]] = []
     passed_n = 0
 
-    for qdir in query_dirs:
-        qid = qdir.name
-        qjson = qdir / "query.json"
-        vpy = qdir / "validate.py"
-        t0 = datetime.now(timezone.utc)
+    mcp_proc = _start_mcp_server() if not dummy else None
+    try:
+        for qdir in query_dirs:
+            qid = qdir.name
+            qjson = qdir / "query.json"
+            vpy = qdir / "validate.py"
+            t0 = datetime.now(timezone.utc)
 
-        row: Dict[str, Any] = {
-            "query_id": qid,
-            "question": None,
-            "agent_answer": None,
-            "passed": False,
-            "execution_time_sec": None,
-            "validation_message": None,
-            "error": None,
-        }
+            row: Dict[str, Any] = {
+                "query_id": qid,
+                "question": None,
+                "agent_answer": None,
+                "passed": False,
+                "execution_time_sec": None,
+                "validation_message": None,
+                "error": None,
+            }
 
-        if not qjson.is_file():
-            row["error"] = "missing_query.json"
-            row["execution_time_sec"] = 0.0
+            if not qjson.is_file():
+                row["error"] = "missing_query.json"
+                row["execution_time_sec"] = 0.0
+                results.append(row)
+                continue
+            if not vpy.is_file():
+                row["error"] = "missing_validate.py"
+                row["execution_time_sec"] = 0.0
+                results.append(row)
+                continue
+
+            question = load_question(qjson)
+            row["question"] = question
+
+            answer, err = invoke_agent_subprocess(
+                module_name=mod_name,
+                query=question,
+                db_config_path=db_config_path,
+                db_description=db_description,
+                dummy=dummy,
+                timeout_sec=timeout_sec,
+            )
+            t1 = datetime.now(timezone.utc)
+            row["execution_time_sec"] = round((t1 - t0).total_seconds(), 3)
+
+            if err == "timeout":
+                row["agent_answer"] = ""
+                row["error"] = f"agent_timeout_after_{timeout_sec}s"
+                results.append(row)
+                continue
+            if err:
+                row["agent_answer"] = answer or ""
+                row["error"] = err
+                results.append(row)
+                continue
+
+            row["agent_answer"] = answer
+
+            try:
+                validate_fn = load_validate_fn(vpy)
+                ok, reason = run_validate(validate_fn, answer)
+                row["passed"] = ok
+                row["validation_message"] = reason
+                if ok:
+                    passed_n += 1
+            except Exception as e:  # noqa: BLE001
+                row["error"] = repr(e)
+                row["passed"] = False
+
             results.append(row)
-            continue
-        if not vpy.is_file():
-            row["error"] = "missing_validate.py"
-            row["execution_time_sec"] = 0.0
-            results.append(row)
-            continue
-
-        question = load_question(qjson)
-        row["question"] = question
-
-        answer, err = invoke_agent_subprocess(
-            module_name=mod_name,
-            query=question,
-            db_config_path=db_config_path,
-            db_description=db_description,
-            dummy=dummy,
-            timeout_sec=timeout_sec,
-        )
-        t1 = datetime.now(timezone.utc)
-        row["execution_time_sec"] = round((t1 - t0).total_seconds(), 3)
-
-        if err == "timeout":
-            row["agent_answer"] = ""
-            row["error"] = f"agent_timeout_after_{timeout_sec}s"
-            results.append(row)
-            continue
-        if err:
-            row["agent_answer"] = answer or ""
-            row["error"] = err
-            results.append(row)
-            continue
-
-        row["agent_answer"] = answer
-
-        try:
-            validate_fn = load_validate_fn(vpy)
-            ok, reason = run_validate(validate_fn, answer)
-            row["passed"] = ok
-            row["validation_message"] = reason
-            if ok:
-                passed_n += 1
-        except Exception as e:  # noqa: BLE001
-            row["error"] = repr(e)
-            row["passed"] = False
-
-        results.append(row)
+    finally:
+        _stop_mcp_server(mcp_proc)
 
     total = len(results)
     failed_n = total - passed_n

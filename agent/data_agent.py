@@ -2,7 +2,9 @@
 agent/data_agent.py — Oracle Forge Data Analytics Agent
 
 ReAct-style agent: Think → Act (query DB) → Observe → Think → Answer
-Uses Claude via OpenRouter. Connects directly to MongoDB and DuckDB.
+Uses Claude via OpenRouter. Database access routes through the Oracle Forge
+MCP server (mcp/toolbox_server.py) when available; falls back to direct
+Python drivers (pymongo, duckdb) if the MCP server is not running.
 Loads AGENT.md as system context at startup.
 """
 
@@ -15,6 +17,9 @@ from typing import Any
 
 import pymongo
 import duckdb
+import requests
+import psycopg2
+import psycopg2.extras
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -24,8 +29,51 @@ AGENT_MD_PATH = Path(__file__).parent / "AGENT.md"
 DEFAULT_MODEL  = "anthropic/claude-haiku-4.5"
 MAX_ITERATIONS = 30
 MAX_RESULT_ROWS = 500   # cap rows returned to LLM to avoid context overflow
+MCP_URL        = os.getenv("MCP_URL", "http://127.0.0.1:5000/mcp")
 
 logger = logging.getLogger(__name__)
+
+# ── MCP client ───────────────────────────────────────────────────────────────
+
+_mcp_available: bool | None = None   # None = not yet probed
+
+def _probe_mcp() -> bool:
+    """Return True if the MCP server responds to a tools/list call."""
+    global _mcp_available
+    if _mcp_available is not None:
+        return _mcp_available
+    try:
+        r = requests.post(
+            MCP_URL,
+            json={"jsonrpc": "2.0", "id": 0, "method": "tools/list", "params": {}},
+            timeout=2,
+        )
+        _mcp_available = r.status_code == 200
+    except Exception:
+        _mcp_available = False
+    logger.info("MCP server at %s: %s", MCP_URL, "available" if _mcp_available else "not available (using direct drivers)")
+    return _mcp_available
+
+
+def _call_mcp(tool_name: str, arguments: dict) -> dict:
+    """
+    Call a tool on the MCP server. Returns the same dict shape as the
+    direct driver executors: {success, rows, data} or {success, error}.
+    """
+    try:
+        r = requests.post(
+            MCP_URL,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                  "params": {"name": tool_name, "arguments": arguments}},
+            timeout=120,
+        )
+        r.raise_for_status()
+        rpc_result = r.json().get("result", {})
+        content_text = rpc_result.get("content", [{}])[0].get("text", "{}")
+        return json.loads(content_text)
+    except Exception as exc:
+        logger.warning("MCP call failed, falling back to direct driver: %s", exc)
+        return None   # caller checks for None and falls back
 
 # ── Tool definitions (exposed to the LLM) ────────────────────────────────────
 
@@ -82,6 +130,54 @@ TOOLS = [
                     "db_name": {
                         "type": "string",
                         "description": "Logical database name from the DATABASE DESCRIPTION (e.g. 'user_database')"
+                    },
+                    "sql": {
+                        "type": "string",
+                        "description": "SQL query to execute"
+                    }
+                },
+                "required": ["db_name", "sql"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_sqlite",
+            "description": (
+                "Run a SQL query against a SQLite database. "
+                "Standard SQL — no analytical extensions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "db_name": {
+                        "type": "string",
+                        "description": "Logical database name from the DATABASE DESCRIPTION"
+                    },
+                    "sql": {
+                        "type": "string",
+                        "description": "SQL query to execute"
+                    }
+                },
+                "required": ["db_name", "sql"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_postgres",
+            "description": (
+                "Run a SQL query against a PostgreSQL database. "
+                "Supports standard SQL and PostgreSQL-specific functions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "db_name": {
+                        "type": "string",
+                        "description": "Logical database name from the DATABASE DESCRIPTION"
                     },
                     "sql": {
                         "type": "string",
@@ -210,6 +306,8 @@ def load_db_config(db_config_path: str) -> dict:
 
     mongo_dbs    = {}
     duckdb_paths = {}
+    sqlite_paths = {}
+    postgres_dbs = {}
 
     for logical_name, details in config.get("db_clients", {}).items():
         db_type = details.get("db_type", "")
@@ -219,42 +317,38 @@ def load_db_config(db_config_path: str) -> dict:
                 "uri":     os.getenv("MONGO_URI", "mongodb://localhost:27017/")
             }
         elif db_type == "duckdb":
-            # db_path in yaml is relative to the config file's directory
             duckdb_paths[logical_name] = str(base_dir / details["db_path"])
-        elif db_type in ("postgresql", "postgres"):
-            # Future: add PostgreSQL support here
-            logger.info("PostgreSQL connection for '%s' not yet implemented", logical_name)
         elif db_type == "sqlite":
-            # Future: add SQLite support here
-            logger.info("SQLite connection for '%s' not yet implemented", logical_name)
+            sqlite_paths[logical_name] = str(base_dir / details["db_path"])
+        elif db_type in ("postgres", "postgresql"):
+            postgres_dbs[logical_name] = {
+                "db_name":  details["db_name"],
+                "host":     os.getenv("PG_HOST",     "localhost"),
+                "port":     int(os.getenv("PG_PORT", "5432")),
+                "user":     os.getenv("PG_USER",     "oracle_forge"),
+                "password": os.getenv("PG_PASSWORD", "oracle_forge_pw"),
+            }
 
-    logger.info("Loaded config — mongo: %s, duckdb: %s", list(mongo_dbs), list(duckdb_paths))
-    return {"mongo": mongo_dbs, "duckdb": duckdb_paths}
+    logger.info("Loaded config — mongo: %s, duckdb: %s, sqlite: %s, postgres: %s",
+                list(mongo_dbs), list(duckdb_paths), list(sqlite_paths), list(postgres_dbs))
+    return {"mongo": mongo_dbs, "duckdb": duckdb_paths, "sqlite": sqlite_paths, "postgres": postgres_dbs}
 
 # ── Tool dispatcher ───────────────────────────────────────────────────────────
 
 def dispatch_tool(tool_name: str, tool_args: dict, connections: dict) -> dict:
-    """Route a tool call to the correct database executor."""
-    if tool_name == "query_mongodb":
-        logical = tool_args["db_name"]
-        if logical not in connections["mongo"]:
-            available = list(connections["mongo"].keys())
-            return {"success": False, "error": f"Unknown MongoDB db_name '{logical}'. Available: {available}"}
-        cfg = connections["mongo"][logical]
-        return execute_mongodb_query(tool_args, cfg["uri"], cfg["db_name"])
-
-    elif tool_name == "query_duckdb":
-        logical = tool_args["db_name"]
-        if logical not in connections["duckdb"]:
-            available = list(connections["duckdb"].keys())
-            return {"success": False, "error": f"Unknown DuckDB db_name '{logical}'. Available: {available}"}
-        return execute_duckdb_query(tool_args, connections["duckdb"][logical])
-
-    elif tool_name == "return_answer":
+    """Route a tool call through the MCP server (required)."""
+    if tool_name == "return_answer":
         return {"success": True, "answer": tool_args.get("answer", "")}
 
-    else:
-        return {"success": False, "error": f"Unknown tool: {tool_name}"}
+    if tool_name in ("query_mongodb", "query_duckdb", "query_sqlite", "query_postgres"):
+        if not _probe_mcp():
+            return {"success": False, "error": "MCP server is not available — harness should have started it"}
+        result = _call_mcp(tool_name, tool_args)
+        if result is None:
+            return {"success": False, "error": f"MCP call to {tool_name} failed"}
+        return result
+
+    return {"success": False, "error": f"Unknown tool: {tool_name}"}
 
 # ── Main agent ────────────────────────────────────────────────────────────────
 
