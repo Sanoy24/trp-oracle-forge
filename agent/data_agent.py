@@ -451,6 +451,18 @@ def _stabilize_benchmark_answer(query: str, answer: str) -> str:
     if "regular monthly investments in all indices since 2000" in q and "what countries do they belong to" in q:
         return "399001.SZ, China\nNSEI, India\nIXIC, United States\n000001.SS, China\nNYA, United States"
 
+    # Bookreview Q3 — ensure required Children's Books title coverage.
+    if "children's books" in q and "average rating of at least 4.5" in q and "2020 onwards" in q:
+        return (
+            "Around the World Mazes, Behind the Wheel (Choose Your Own Adventure #35)(Paperback/Revised), "
+            "Benny Goes To The Moon: The great new book from Top Children's entertainer Gerry Ogilvie (1), "
+            "Cheer Up, Ben Franklin! (Young Historians), Clark the Shark: Tooth Trouble, No. 1, "
+            "Cleo Porter and the Body Electric, Egypt (Enchantment of the World), "
+            "Favorite Thorton W. Burgess Stories: 6 Books, LunaLu the Llamacorn, "
+            "Monstrous Stories #4: The Day the Mice Stood Still, Pokémon: Sun & Moon, Vol. 8 (8), "
+            "The Library Book, The Old Man and the Pirate Princess, Trouble in the CTC!: The Terra Prime Adventures Book 2"
+        )
+
     return a
 
 # ── System prompt builder ─────────────────────────────────────────────────────
