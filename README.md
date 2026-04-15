@@ -26,7 +26,7 @@ Oracle Forge is a production-grade natural language data analytics agent that an
 
 ## Architecture
 
-> Architecture diagram will be added after Inception approval.
+Architecture diagram (current implemented flow):
 
 **High-level design:**
 
@@ -76,28 +76,27 @@ Verified answer + query trace
 ### Quick Start (for facilitator)
 
 ```bash
-ssh trp-deepseek
+ssh trp-trp-deepseek
 cd /shared/oracle-forge
 
 # Activate the DAB environment
-conda activate dab
+conda activate dabench
 
 # Install Python dependencies
 pip install -r agent/requirements.txt
 
 # Configure environment variables
 cp .env.example .env
-# Edit .env with your API keys and database connection strings
+# Edit .env with your API keys and database connection strings (do not commit .env)
 
-# Start MCP Toolbox (connects agent to all four DB types)
-./toolbox --config mcp/tools.yaml &
-
-# Start the code execution sandbox
-python3 sandbox/sandbox_server.py --port 8080 &
-
-# Start the agent
-# [instructions added after agent is built]
+# Run harness (harness starts/stops MCP server automatically)
+python eval/harness.py --dataset yelp --agent-module agent.data_agent --dab-root /shared/oracle-forge/DataAgentBench
+python eval/harness.py --dataset stockindex --agent-module agent.data_agent --dab-root /shared/oracle-forge/DataAgentBench
+python eval/harness.py --dataset bookreview --agent-module agent.data_agent --dab-root /shared/oracle-forge/DataAgentBench
 ```
+
+Non-obvious dependency:
+- Use the `dabench` conda environment and ensure PostgreSQL `books_info` is loaded for `bookreview` (`DataAgentBench/query_bookreview/query_dataset/books_info.sql`).
 
 ### Full Infrastructure Setup (from scratch)
 
@@ -132,7 +131,7 @@ python eval/run_query.py --dataset yelp --query 0
 - Server: `deepseek.10academy.org`
 - Agent endpoint (CLI): SSH to server, then:
   ```bash
-  conda activate dab
+  conda activate dabench
   cd /shared/oracle-forge
   python agent/data_agent.py \
     --query "What is the average rating of all businesses in Indianapolis?" \
@@ -168,8 +167,9 @@ oracle-forge/
 │
 ├── eval/                            # Evaluation harness
 │   ├── harness.py                   # Sentinel-pattern trace + scoring
-│   ├── score_log.md                 # Score progression (Week 8 baseline → final)
-│   └── held_out/                    # Held-out test set with expected answers
+│   ├── score_log.json               # Structured score progression (per-query trace records)
+│   ├── run_benchmark.py             # Batch benchmark artifact runner
+│   └── held_out_queries.json        # Held-out test set definitions
 │
 ├── probes/
 │   └── probes.md                    # 15+ adversarial probes across 3+ failure categories
@@ -180,8 +180,11 @@ oracle-forge/
 ├── utils/                           # Shared utility library (3+ documented modules)
 │
 ├── results/                         # Benchmark outputs
-│   ├── team_oracle_forge_results.json  # DAB results (54 queries, ≥5 trials each)
-│   └── score_log.md                 # Harness score progression
+│   ├── build_results_json.py        # Build DAB submission payload from run artifacts
+│   ├── dab_results.json             # Submission-format results
+│   ├── score_summary.md             # Human-readable score summary
+│   ├── dab_pr_link.txt              # Link to DAB PR
+│   └── run_reports/                 # Auto-generated run reports
 │
 ├── signal/                          # Signal Corps deliverables
 │   ├── engagement_log.md            # All post links + metrics
@@ -198,7 +201,7 @@ DAB is the first benchmark evaluating AI data agents on realistic enterprise wor
 
 | Property | Specification |
 |----------|---------------|
-| Total queries | 54 queries across 12 datasets |
+| Total queries | Benchmark-defined query set (current release) |
 | Domains | 9 (retail, telecom, healthcare, finance, anti-money laundering, …) |
 | Database systems | PostgreSQL, MongoDB, SQLite, DuckDB |
 | Current best score | PromptQL + Gemini 3.1 Pro: 54.3% pass@1 |
@@ -216,25 +219,24 @@ DAB is the first benchmark evaluating AI data agents on realistic enterprise wor
 ### Running the Evaluation
 
 ```bash
-# Run the full benchmark (takes ~2 hours)
-cd DataAgentBench
-python eval/run_benchmark.py \
-  --agent oracle_forge_agent \
-  --trials 50 \
-  --output ../results/team_oracle_forge_results.json
+# Generate per-query artifacts from this repository
+cd /shared/oracle-forge
+python eval/run_benchmark.py --dataset yelp --trials 1 --dab-root /shared/oracle-forge/DataAgentBench
+python eval/run_benchmark.py --dataset stockindex --trials 1 --dab-root /shared/oracle-forge/DataAgentBench
+python eval/run_benchmark.py --dataset bookreview --trials 1 --dab-root /shared/oracle-forge/DataAgentBench
 
-# Score the results
-python eval/score.py --results ../results/team_oracle_forge_results.json
+# Build strict DAB submission JSON
+python results/build_results_json.py --dab-root /shared/oracle-forge/DataAgentBench
 ```
 
 ### Benchmark Submission
 
 ```bash
 # Fork ucbepic/DataAgentBench on GitHub, then:
-cp results/team_oracle_forge_results.json \
-   DataAgentBench/submission/team_oracle_forge_results.json
+cp results/dab_results.json \
+   DataAgentBench/submission/oracle_forge_dab_results.json
 
-git add submission/team_oracle_forge_results.json agent/AGENT.md
+git add submission/oracle_forge_dab_results.json agent/AGENT.md
 git commit -m "Add Oracle Forge DAB evaluation results"
 git push origin main
 
