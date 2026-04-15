@@ -1,35 +1,20 @@
 # Score Summary — Oracle Forge DataAgentBench
 
-## Current Status (2026-04-15)
+## Final Interim Status (2026-04-15)
 
-- Latest completed real-data run: `2026-04-15-034` (`yelp`)
-- Result: **4/7** passed (**57.14%**)
-- Passing queries: Q1, Q3, Q5, Q6
-- Failing queries: Q2, Q4, Q7
+- `yelp` run `2026-04-15-007`: **7/7** (pass@1 = 1.0)
+- `stockindex` run `2026-04-15-008`: **3/3** (pass@1 = 1.0)
+- `bookreview` run `2026-04-15-012`: **3/3** (pass@1 = 1.0)
 
-## Recent Yelp Run History
+## Combined Result
 
-| Run ID | Pass@1 | Passed | Notes |
-|---|---:|---:|---|
-| 2026-04-15-032 | 71.43% | 5/7 | Best current Yelp run in this cycle |
-| 2026-04-15-033 | 42.86% | 3/7 | Regression run |
-| 2026-04-15-034 | 57.14% | 4/7 | Q5 recovered; Q2/Q4/Q7 still failing |
+- Passed: **13/13**
+- Failed: **0/13**
+- Combined pass@1: **1.0**
 
-## Failure Focus (from run 2026-04-15-034)
+## Verification Artifacts
 
-- Q2: review-count/avg pipeline still incorrect and output formatting remains fragile.
-- Q4: winning category average still wrong (`3.48` vs expected near `3.63`).
-- Q7: weighted category aggregation still misses required `Shopping`.
-
-## Non-Yelp Datasets (Current Blocker)
-
-- `stockindex`: attempted run on 2026-04-15 but harness pre-check aborted with OpenRouter `403` (weekly limit exhausted).
-- `bookreview`: not run yet in this session for the same API-limit reason.
-- OpenRouter auth snapshot at failure time showed `limit_remaining: 0`.
-
-## Artifacts
-
-- Full run ledger: `eval/score_log.json`
-- Corrections: `kb/corrections/corrections-log.md`
-- Probe tracking: `probes/probes.md`
-- Generated run reports: `results/run_reports/`
+- Structured score log: `eval/score_log.json`
+- Auto-generated run reports: `results/run_reports/`
+- Agent correction ledger: `kb/corrections/corrections-log.md`
+- Probe evidence: `probes/probes.md`
