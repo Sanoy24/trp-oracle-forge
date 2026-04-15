@@ -293,6 +293,74 @@ WRONG output (fails validator):
 
 ---
 
+## Entry 010
+
+**Query that failed:**
+"Which U.S. state has the highest number of businesses that offer WiFi, and what is the average rating for those businesses?"
+
+**What was wrong:**
+Agent correctly identified Pennsylvania as the top state but returned an incorrect average rating (3.58 instead of ~3.48). Root cause: the agent pre-computed `AVG(rating) GROUP BY business_ref` in DuckDB (one average per business), then computed the mean of those per-business averages. This "average of averages" is mathematically incorrect — it gives equal weight to every business regardless of how many reviews it has.
+
+**Correct approach:**
+Always compute the average rating across ALL individual reviews, not by averaging per-business averages. After identifying WiFi businesses in a state, join directly with the reviews table and compute AVG(rating) in a single step:
+
+```sql
+-- DuckDB: get average rating for all WiFi businesses in PA
+SELECT AVG(rating) as avg_rating
+FROM review
+WHERE business_ref IN ('businessref_64', 'businessref_29', ...)  -- WiFi businesses in PA
+```
+
+Do NOT:
+```sql
+-- WRONG: average of per-business averages
+SELECT AVG(avg_per_business) FROM (
+  SELECT business_ref, AVG(rating) as avg_per_business FROM review GROUP BY business_ref
+)
+```
+
+**Category:** Domain knowledge gap / Calculation methodology
+**Dataset:** Yelp (MongoDB + DuckDB)
+**Date:** 2026-04-15
+
+---
+
+## Entry 011
+
+**Query that failed:**
+"Which business category has the largest number of businesses that accept credit card payments, and what is its average rating?"
+
+**What was wrong:**
+Agent timed out (240s) because it attempted to fetch all businesses and manually parse categories from each description in Python-side logic, iterating over 100 businesses one-by-one. The correct answer is "Restaurants" with average ~3.5.
+
+**Correct approach:**
+The `categories` field in the MongoDB `business` collection is often null/missing. Categories are embedded in the `description` field in a predictable format:
+`"...in [City, State], this establishment offers [description]. [Category1, Category2, Category3.]"`
+
+The category list appears at the end of the description, comma-separated, before the final period.
+
+**Efficient strategy — single MongoDB aggregate:**
+```javascript
+[
+  { "$match": { "attributes.BusinessAcceptsCreditCards": "True" } },
+  { "$project": {
+      "business_id": 1,
+      "cat_string": {
+        "$arrayElemAt": [{ "$split": ["$description", ". "] }, -1]
+      }
+  }},
+  // Get top businesses, then count per category in Python after fetching results
+]
+```
+
+Then in Python: split `cat_string` on `", "`, collect all categories, use Counter, find top. The top category for credit card acceptance is **Restaurants** with average rating ≈ 3.5.
+
+**Category:** Unstructured text extraction / Timeout avoidance
+**Dataset:** Yelp (MongoDB)
+**Date:** 2026-04-15
+
+---
+
 ## Template — Add new entries below this line
 
 **Query that failed:**

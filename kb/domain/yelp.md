@@ -56,13 +56,34 @@ Parse using Python `ast.literal_eval()` after stripping the outer string, or use
 
 ## Categories Field
 
-`business.categories` is a **comma-separated string** of category names:
+**CRITICAL:** `business.categories` is **NULL for most businesses** in this dataset. Do NOT rely on it.
+
+Categories are embedded in the **`description` text field**, appended at the end:
 
 ```
-"Restaurants, Italian, Pizza"
+"Located at 123 Main St in City, PA, this establishment provides services in
+Restaurants, Pizza, Italian."
 ```
 
-To find businesses in a category, use case-insensitive substring match. Do not expect exact single-value entries.
+To extract categories from description:
+```python
+# Python-side extraction
+desc = doc["description"]
+# Last sentence often contains categories
+last_part = desc.rsplit(". ", 1)[-1].rstrip(".")
+categories = [c.strip() for c in last_part.split(", ")]
+```
+
+For MongoDB aggregation, extract via `$split` on the description string or fetch descriptions and process in Python. Never query `business.categories` directly.
+
+**IMPORTANT for average-of-group queries:**
+When computing average rating for a group of businesses (e.g. all credit-card-accepting businesses), get ALL individual review ratings and compute AVG once:
+```sql
+-- CORRECT: single AVG across all reviews
+SELECT AVG(rating) FROM review WHERE business_ref IN (...)
+-- WRONG: average of per-business averages (gives wrong result)
+SELECT AVG(per_biz_avg) FROM (SELECT AVG(rating) per_biz_avg FROM review GROUP BY business_ref)
+```
 
 ---
 
