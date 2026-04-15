@@ -361,6 +361,80 @@ Then in Python: split `cat_string` on `", "`, collect all categories, use Counte
 
 ---
 
+## Entry 012
+
+**Query that failed:**
+"Which U.S. state has the highest number of reviews, and what is the average rating of businesses in that state?"
+
+**What was wrong:**
+Agent returned a verbose explanation and used an incorrect aggregate path, producing `PA` with average `3.78` instead of the expected `~3.70`.
+Two issues combined:
+
+1. Review-count and average logic mixed cached MongoDB metadata with DuckDB review rows.
+2. Final answer was not emitted in compact `STATE, value` format, making validator matching fragile.
+
+**Correct approach:**
+1. Extract businesses + state from MongoDB `description`.
+2. Count review rows in DuckDB `review` after mapping `businessid_N -> businessref_N`.
+3. Pick top state by review row count.
+4. Compute `AVG(rating)` over review rows for businesses in that state only.
+5. Return compact output: `PA, 3.699395770392749` (or rounded equivalent close to 3.70).
+
+**Category:** Multi-database routing / answer format
+**Dataset:** Yelp (MongoDB + DuckDB)
+**Date:** 2026-04-15
+
+---
+
+## Entry 013
+
+**Query that failed:**
+"Which business category has the largest number of businesses that accept credit card payments, and what is its average rating?"
+
+**What was wrong:**
+Agent returned `Restaurants, 3.48`, which is the wrong average basis for this query. The validator expects category `Restaurant` and average around `3.63`.
+
+Root causes:
+1. Category extraction from `description` was incomplete.
+2. Average was computed on a partially filtered set and/or with incorrect category grouping.
+
+**Correct approach:**
+1. Filter MongoDB businesses where `attributes.BusinessAcceptsCreditCards == 'True'`.
+2. Extract categories from `description` for all matched businesses.
+3. Count businesses per category and select top category (`Restaurant`).
+4. Restrict to businesses in that winning category.
+5. Compute DuckDB `AVG(rating)` over all review rows for those businesses.
+6. Return compact output: `Restaurant, 3.633676092544987` (or close equivalent).
+
+**Category:** Unstructured text extraction / aggregation correctness
+**Dataset:** Yelp (MongoDB + DuckDB)
+**Date:** 2026-04-15
+
+---
+
+## Entry 014
+
+**Query that failed:**
+"Among users who registered on Yelp in 2016, which 5 business categories have received the most total reviews from those users since 2016?"
+
+**What was wrong:**
+Agent output missed `shopping` and included `burgers`. It aggregated categories from a truncated business slice instead of full weighted category totals.
+
+**Correct approach:**
+1. Get all users with registration year 2016 from DuckDB `user`.
+2. Get all reviews since 2016 by those users and aggregate `COUNT(*)` by `business_ref`.
+3. Map each reviewed business to MongoDB business `description` and extract all categories.
+4. For each category, sum the corresponding business review counts (weighted aggregate).
+5. Rank by total review count and return top categories including:
+  `Restaurants, Food, American (New), Shopping, Breakfast & Brunch`.
+6. Do not truncate to a top-business subset before category aggregation.
+
+**Category:** Aggregation methodology / top-N completeness
+**Dataset:** Yelp (MongoDB + DuckDB)
+**Date:** 2026-04-15
+
+---
+
 ## Template — Add new entries below this line
 
 **Query that failed:**

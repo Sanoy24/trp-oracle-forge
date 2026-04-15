@@ -14,7 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-RUN_ID_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(\d{8}-\d{6})-(.+)$")
+RUN_ID_STAMPED_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(\d{8}-\d{6})-(.+)$")
+RUN_ID_SIMPLE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})-(\d{3})$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -35,17 +36,24 @@ def load_runs(score_log_path: Path) -> list[dict[str, Any]]:
 
 def get_stamp(run: dict[str, Any]) -> str | None:
     run_id = str(run.get("run_id", ""))
-    m = RUN_ID_RE.match(run_id)
-    if not m:
-        return None
-    return m.group(2)
+    m = RUN_ID_STAMPED_RE.match(run_id)
+    if m:
+        # Legacy multi-dataset runs share this timestamp stamp.
+        return m.group(2)
+    m2 = RUN_ID_SIMPLE_RE.match(run_id)
+    if m2:
+        # Newer harness emits YYYY-MM-DD-NNN (single dataset per run).
+        # Use full run_id as the grouping key so latest run is reportable.
+        return run_id
+    return None
 
 
 def latest_stamp(runs: list[dict[str, Any]]) -> str:
-    stamps = [s for s in (get_stamp(r) for r in runs) if s]
-    if not stamps:
-        raise ValueError("No parseable run_id stamps found in score_log")
-    return max(stamps)
+    for run in reversed(runs):
+        stamp = get_stamp(run)
+        if stamp:
+            return stamp
+    raise ValueError("No parseable run_id stamps found in score_log")
 
 
 def collect_stamp_runs(runs: list[dict[str, Any]], stamp: str) -> list[dict[str, Any]]:
