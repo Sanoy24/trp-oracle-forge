@@ -129,6 +129,9 @@ python eval/run_query.py --dataset yelp --query 0
 ### Live Agent Access
 
 - Server: `deepseek.10academy.org`
+- Public API (temporary Cloudflare tunnel): `https://rider-movements-followed-nuts.trycloudflare.com`
+- Health endpoint: `https://rider-movements-followed-nuts.trycloudflare.com/health`
+- Ask endpoint: `https://rider-movements-followed-nuts.trycloudflare.com/ask`
 - Agent endpoint (CLI): SSH to server, then:
   ```bash
   conda activate dabench

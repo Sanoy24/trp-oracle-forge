@@ -709,7 +709,7 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
     # Init LLM client (OpenRouter)
     client = OpenAI(
         api_key=os.getenv("ANTHROPIC_API_KEY"),
-        base_url="https://openrouter.ai/api/v1"
+        base_url="https://openrouter.ai/api/v1",
     )
     model = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
     logger.info("Model: %s", model)
