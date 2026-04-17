@@ -129,6 +129,16 @@ python eval/run_query.py --dataset yelp --query 0
 ### Live Agent Access
 
 - Server: `deepseek.10academy.org`
+- Public API (temporary Cloudflare tunnel): `https://rider-movements-followed-nuts.trycloudflare.com`
+- Health endpoint: `https://rider-movements-followed-nuts.trycloudflare.com/health`
+- Ask endpoint: `https://rider-movements-followed-nuts.trycloudflare.com/ask`
+- Stability note: the `trycloudflare.com` URL is ephemeral and may rotate/expire between sessions.
+- Review-safe access path: use SSH + CLI on `deepseek.10academy.org` (stable host access).
+- If the tunnel expires, mint a new one and update this section:
+     ```bash
+     docker run --rm --network host cloudflare/cloudflared:latest \
+          tunnel --no-autoupdate --url http://127.0.0.1:8787
+     ```
 - Agent endpoint (CLI): SSH to server, then:
   ```bash
   conda activate dabench

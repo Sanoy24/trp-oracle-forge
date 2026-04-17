@@ -95,7 +95,6 @@ def _check_llm_api() -> Optional[str]:
     """
     Quick sanity check: verify the LLM API key is usable before running queries.
     Returns None if OK, or an error string if the key is exhausted / invalid.
-    Reads ANTHROPIC_API_KEY and OPENROUTER_MODEL from environment (or .env).
     """
     try:
         from dotenv import load_dotenv
