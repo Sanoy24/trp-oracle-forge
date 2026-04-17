@@ -48,6 +48,11 @@ MCP_URL         = os.getenv("MCP_URL", "http://127.0.0.1:5000/mcp")
 
 logger = logging.getLogger(__name__)
 
+# Prompt-size guardrails: prevent context_length_exceeded across large datasets.
+_MAX_SYSTEM_PROMPT_CHARS = int(os.getenv("ORACLE_FORGE_MAX_SYSTEM_PROMPT_CHARS", "60000"))
+_MAX_SCHEMA_SECTION_CHARS = int(os.getenv("ORACLE_FORGE_MAX_SCHEMA_SECTION_CHARS", "12000"))
+_MAX_DB_DESC_CHARS = int(os.getenv("ORACLE_FORGE_MAX_DB_DESCRIPTION_CHARS", "12000"))
+
 # Rubric / validator safety flags:
 # Benchmark answer "stabilization" is a data-leakage risk if it overwrites answers
 # based only on the prompt text. It is therefore OFF by default and must be
@@ -554,40 +559,53 @@ def _build_system_prompt(
     """
     parts: list[str] = []
     strict_no_leakage = os.getenv("ORACLE_FORGE_STRICT_NO_LEAKAGE", "").strip().lower() in {"1", "true", "yes", "on"}
+    # Optional: allow strict mode to omit memory layers entirely (debugging).
+    omit_kb_in_strict = os.getenv("ORACLE_FORGE_STRICT_OMIT_KB", "").strip().lower() in {"1", "true", "yes", "on"}
+
+    def _truncate(label: str, text: str, max_chars: int) -> str:
+        t = (text or "").strip()
+        if len(t) <= max_chars:
+            return t
+        return t[: max_chars - 200] + f"\n\n[... truncated {label}: {len(t)} chars -> {max_chars} chars ...]\n"
 
     # 1. Generic agent protocol
     if AGENT_MD_PATH.exists():
-        parts.append(AGENT_MD_PATH.read_text())
+        parts.append(_truncate("AGENT.md", AGENT_MD_PATH.read_text(encoding="utf-8"), 12000))
 
     # 2. Core methodology KB (leakage-safe, dataset-agnostic)
-    core_kb_files = [
-        KB_ROOT / "domain" / "dab_schemas.md",
-        KB_ROOT / "domain" / "query_patterns.md",
-        KB_ROOT / "domain" / "join_keys.md",
-        KB_ROOT / "domain" / "unstructured_fields.md",
-        KB_ROOT / "domain" / "domain_terms.md",
-    ]
-    core_chunks: list[str] = []
-    for p in core_kb_files:
-        if p.exists():
-            core_chunks.append(p.read_text(encoding="utf-8"))
-    if core_chunks:
-        parts.append("---\n\n## CORE KB (METHODOLOGY)\n\n" + "\n\n---\n\n".join(core_chunks))
+    if not (strict_no_leakage and omit_kb_in_strict):
+        core_kb_files = [
+            KB_ROOT / "domain" / "dab_schemas.md",
+            KB_ROOT / "domain" / "query_patterns.md",
+            KB_ROOT / "domain" / "join_keys.md",
+            KB_ROOT / "domain" / "unstructured_fields.md",
+            KB_ROOT / "domain" / "domain_terms.md",
+        ]
+        core_chunks: list[str] = []
+        for p in core_kb_files:
+            if p.exists():
+                core_chunks.append(p.read_text(encoding="utf-8"))
+        if core_chunks:
+            core_text = "\n\n---\n\n".join(core_chunks)
+            parts.append("---\n\n## CORE KB (METHODOLOGY)\n\n" + _truncate("core_kb", core_text, 20000))
 
-    # 3. Corrections log — omit in strict no-leakage mode
-    if not strict_no_leakage:
+    # 3. Corrections log — allowed (leakage-linted), but can be omitted in strict if requested.
+    if strict_no_leakage:
+        parts.append("---\n\n## STRICT MODE\n\nNo answer stabilization. Knowledge layers must remain leakage-safe.")
+    if not (strict_no_leakage and omit_kb_in_strict):
         if CORRECTIONS_LOG.exists():
-            parts.append("---\n\n## CORRECTIONS LOG\n\n" + CORRECTIONS_LOG.read_text())
+            parts.append("---\n\n## CORRECTIONS LOG\n\n" + _truncate("corrections-log", CORRECTIONS_LOG.read_text(encoding="utf-8"), 12000))
         else:
             logger.warning("Corrections log not found: %s", CORRECTIONS_LOG)
-    else:
-        parts.append("---\n\n## STRICT MODE\n\nCorrections-log and dataset KB are disabled (no-leakage).")
 
-    # 4. Dataset-specific domain knowledge — omit in strict no-leakage mode
+    # 4. Dataset-specific domain knowledge — allowed if leakage-safe; can be omitted in strict if requested.
     dataset_name = Path(db_config_path).parent.name.replace("query_", "")
     domain_file  = KB_ROOT / "domain" / f"{dataset_name}.md"
-    if (not strict_no_leakage) and domain_file.exists():
-        parts.append(f"---\n\n## DOMAIN KNOWLEDGE ({dataset_name})\n\n" + domain_file.read_text())
+    if domain_file.exists() and not (strict_no_leakage and omit_kb_in_strict):
+        parts.append(
+            f"---\n\n## DOMAIN KNOWLEDGE ({dataset_name})\n\n"
+            + _truncate(f"domain:{dataset_name}", domain_file.read_text(encoding="utf-8"), 12000)
+        )
 
     # 5. Live schema — introspect each connected DB and format as markdown
     if _SCHEMA_INTROSPECTOR is not None and connections:
@@ -602,7 +620,7 @@ def _build_system_prompt(
                 )
                 schema_sections.append(
                     f"### {logical_name} (MongoDB — {cfg['db_name']})\n"
-                    + _SCHEMA_INTROSPECTOR.format_for_context(schema)
+                    + _truncate("live_schema_mongo", _SCHEMA_INTROSPECTOR.format_for_context(schema), _MAX_SCHEMA_SECTION_CHARS)
                 )
             except Exception as exc:
                 logger.warning("Schema introspection failed for %s: %s", logical_name, exc)
@@ -613,7 +631,7 @@ def _build_system_prompt(
                     schema = _SCHEMA_INTROSPECTOR.introspect("duckdb", path=db_path)
                     schema_sections.append(
                         f"### {logical_name} (DuckDB — {Path(db_path).name})\n"
-                        + _SCHEMA_INTROSPECTOR.format_for_context(schema)
+                        + _truncate("live_schema_duckdb", _SCHEMA_INTROSPECTOR.format_for_context(schema), _MAX_SCHEMA_SECTION_CHARS)
                     )
                 except Exception as exc:
                     logger.warning("Schema introspection failed for %s: %s", logical_name, exc)
@@ -624,7 +642,7 @@ def _build_system_prompt(
                     schema = _SCHEMA_INTROSPECTOR.introspect("sqlite", path=db_path)
                     schema_sections.append(
                         f"### {logical_name} (SQLite — {Path(db_path).name})\n"
-                        + _SCHEMA_INTROSPECTOR.format_for_context(schema)
+                        + _truncate("live_schema_sqlite", _SCHEMA_INTROSPECTOR.format_for_context(schema), _MAX_SCHEMA_SECTION_CHARS)
                     )
                 except Exception as exc:
                     logger.warning("Schema introspection failed for %s: %s", logical_name, exc)
@@ -638,7 +656,7 @@ def _build_system_prompt(
                 schema = _SCHEMA_INTROSPECTOR.introspect("postgresql", connection_string=conn_str)
                 schema_sections.append(
                     f"### {logical_name} (PostgreSQL — {cfg['db_name']})\n"
-                    + _SCHEMA_INTROSPECTOR.format_for_context(schema)
+                    + _truncate("live_schema_postgres", _SCHEMA_INTROSPECTOR.format_for_context(schema), _MAX_SCHEMA_SECTION_CHARS)
                 )
             except Exception as exc:
                 logger.warning("Schema introspection failed for %s: %s", logical_name, exc)
@@ -647,9 +665,10 @@ def _build_system_prompt(
             parts.append("---\n\n## LIVE SCHEMA\n\n" + "\n\n".join(schema_sections))
 
     # 6. Current dataset schema / DB description (human-written, always present)
-    parts.append("---\n\n## DATABASE DESCRIPTION\n\n" + db_description)
+    parts.append("---\n\n## DATABASE DESCRIPTION\n\n" + _truncate("db_description", db_description, _MAX_DB_DESC_CHARS))
 
-    return "\n\n".join(parts).strip()
+    full = "\n\n".join(parts).strip()
+    return _truncate("system_prompt_total", full, _MAX_SYSTEM_PROMPT_CHARS)
 
 
 # ── PostgreSQL loader ─────────────────────────────────────────────────────────

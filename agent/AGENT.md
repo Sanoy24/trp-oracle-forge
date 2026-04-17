@@ -76,6 +76,8 @@ Diagnose before retrying:
 - **SQL dialect error?** — DuckDB uses analytical SQL; MongoDB requires aggregation pipelines.
 - **Mongo max/min/top-1 queries** — do NOT `find` and rely on truncated 500-row samples for global extrema.
   Prefer `query_mongodb` with `query_type='aggregate'` using `$match` + `$project` + `$sort` + `$limit: 1`.
+- **Mongo aggregate JSON contract** — the `query` argument must be a valid JSON string (double quotes on all keys/strings).
+  If you see `Expecting property name enclosed in double quotes`, rebuild the pipeline as strict JSON.
 - **SQLite table/column not found** — introspect instead of guessing:
   - `SELECT name FROM sqlite_master WHERE type='table'`
   - `PRAGMA table_info(<table_name>)`

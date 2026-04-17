@@ -181,8 +181,13 @@ def load_question(query_json: Path) -> str:
     return raw
 
 
-def load_validate_fn(validate_py: Path) -> Callable[..., Any]:
+def load_validate_fn(validate_py: Path, *, dab_root: Path) -> Callable[..., Any]:
     mod_name = f"dab_validate_{validate_py.parent.name}"
+    # DAB validators often import helpers like `common_scaffold.*`.
+    # Ensure the DataAgentBench checkout is importable.
+    dab_root_str = str(dab_root.resolve())
+    if dab_root_str not in sys.path:
+        sys.path.insert(0, dab_root_str)
     spec = importlib.util.spec_from_file_location(mod_name, validate_py)
     if spec is None or spec.loader is None:
         raise ImportError(f"Cannot load spec for {validate_py}")
@@ -430,7 +435,7 @@ def run_harness(
             row["query_trace"] = trace
 
             try:
-                validate_fn = load_validate_fn(vpy)
+                validate_fn = load_validate_fn(vpy, dab_root=dab_root)
                 ok, reason = run_validate(validate_fn, answer)
                 row["passed"] = ok
                 row["validation_message"] = reason
