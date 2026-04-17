@@ -102,20 +102,35 @@ def _check_llm_api() -> Optional[str]:
     except ImportError:
         pass
 
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        return "ANTHROPIC_API_KEY not set in environment or .env"
+    # Default behavior: prefer OpenAI if OPENAI_API_KEY is present.
+    llm_provider = os.getenv("ORACLE_FORGE_LLM_PROVIDER", "").strip().lower()
+    has_openai = bool(os.getenv("OPENAI_API_KEY", "").strip())
+    if llm_provider in ("openrouter", "open_router"):
+        has_openai = False
+
+    if llm_provider in ("openai", "open_ai") or (not llm_provider and has_openai):
+        api_key = os.getenv("OPENAI_API_KEY", "")
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        url = "https://api.openai.com/v1/chat/completions"
+        if not api_key:
+            return "OPENAI_API_KEY not set in environment or .env"
+    else:
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+        model = os.getenv("OPENROUTER_MODEL", "anthropic/claude-haiku-4.5")
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        if not api_key:
+            return "ANTHROPIC_API_KEY not set in environment or .env"
 
     try:
         import urllib.request as _req
         import json as _json
         payload = _json.dumps({
-            "model": os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini"),
+            "model": model,
             "messages": [{"role": "user", "content": "ping"}],
             "max_tokens": 1,
         }).encode()
         request = _req.Request(
-            "https://openrouter.ai/api/v1/chat/completions",
+            url,
             data=payload,
             headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
             method="POST",
@@ -128,12 +143,16 @@ def _check_llm_api() -> Optional[str]:
     except Exception as exc:
         msg = str(exc)
         if "403" in msg and "limit" in msg.lower():
+            if llm_provider in ("openai", "open_ai"):
+                return f"OpenAI access blocked (HTTP 403) — check account/quota. Details: {msg[:200]}"
             return (
                 "OpenRouter weekly token limit exceeded (HTTP 403). "
                 "Update ANTHROPIC_API_KEY in .env with a fresh key, or wait for the weekly reset. "
                 f"Details: {msg[:200]}"
             )
         if "401" in msg:
+            if llm_provider in ("openai", "open_ai"):
+                return f"API authentication failed (HTTP 401) — check OPENAI_API_KEY in .env. Details: {msg[:200]}"
             return f"API authentication failed (HTTP 401) — check ANTHROPIC_API_KEY in .env. Details: {msg[:200]}"
         return f"API health check failed: {msg[:300]}"
 
@@ -282,31 +301,6 @@ def print_summary_table(run: Dict[str, Any]) -> None:
     print()
 
 
-def _resolve_dataset_root(dab_root: Path, dataset: str) -> tuple[str, Path]:
-    """Resolve query_<dataset> directory case-insensitively.
-
-    Returns:
-        (canonical_dataset_key, dataset_root_path)
-    """
-    requested = dataset.strip()
-    direct = dab_root / f"query_{requested}"
-    if direct.is_dir():
-        return requested, direct
-
-    requested_lower = requested.lower()
-    for cand in dab_root.glob("query_*"):
-        if not cand.is_dir():
-            continue
-        suffix = cand.name.replace("query_", "", 1)
-        if suffix.lower() == requested_lower:
-            return suffix, cand
-
-    raise FileNotFoundError(
-        f"Dataset directory not found for '{dataset}' under {dab_root}. "
-        "Expected a query_<dataset> folder."
-    )
-
-
 def run_harness(
     *,
     dataset: str,
@@ -317,7 +311,10 @@ def run_harness(
     run_id: Optional[str],
     score_log_path: Path,
 ) -> Dict[str, Any]:
-    dataset_key, dataset_root = _resolve_dataset_root(dab_root, dataset)
+    dataset_key = dataset.strip().lower()
+    dataset_root = dab_root / f"query_{dataset_key}"
+    if not dataset_root.is_dir():
+        raise FileNotFoundError(f"Dataset directory not found: {dataset_root}")
 
     db_config = dataset_root / "db_config.yaml"
     db_desc = dataset_root / "db_description.txt"

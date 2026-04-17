@@ -49,10 +49,10 @@ MCP_URL         = os.getenv("MCP_URL", "http://127.0.0.1:5000/mcp")
 logger = logging.getLogger(__name__)
 
 # Rubric / validator safety flags:
-# Some previously added last-mile benchmark answer stabilization could be
-# interpreted as “data leakage” if left enabled during strict validation.
-# These flags allow reruns to measure true agent performance.
-_DISABLE_BENCH_STABILIZATION = os.getenv("ORACLE_FORGE_DISABLE_BENCH_STABILIZATION", "").strip().lower() in {
+# Benchmark answer "stabilization" is a data-leakage risk if it overwrites answers
+# based only on the prompt text. It is therefore OFF by default and must be
+# explicitly enabled.
+_ENABLE_BENCH_STABILIZATION = os.getenv("ORACLE_FORGE_ENABLE_BENCH_STABILIZATION", "").strip().lower() in {
     "1",
     "true",
     "yes",
@@ -706,12 +706,24 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
     # Build system prompt: AGENT.md + corrections log + domain KB + live schema + DB description
     system_prompt = _build_system_prompt(db_config_path, db_description, connections)
 
-    # Init LLM client (OpenRouter)
-    client = OpenAI(
-        api_key=os.getenv("ANTHROPIC_API_KEY"),
-        base_url="https://openrouter.ai/api/v1",
-    )
-    model = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
+    # Init LLM client.
+    # Default behavior: prefer OpenAI if OPENAI_API_KEY is present.
+    llm_provider = os.getenv("ORACLE_FORGE_LLM_PROVIDER", "").strip().lower()
+    has_openai = bool(os.getenv("OPENAI_API_KEY", "").strip())
+    if llm_provider in ("openrouter", "open_router"):
+        has_openai = False
+
+    if llm_provider in ("openai", "open_ai") or (not llm_provider and has_openai):
+        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
+        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        logger.info("LLM provider: openai")
+    else:
+        client = OpenAI(
+            api_key=os.getenv("ANTHROPIC_API_KEY"),
+            base_url="https://openrouter.ai/api/v1",
+        )
+        model = os.getenv("OPENROUTER_MODEL", DEFAULT_MODEL)
+        logger.info("LLM provider: openrouter")
     logger.info("Model: %s", model)
 
     messages = [
@@ -805,10 +817,10 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
         else:
             final_answer = _force_compact_final_answer(client, model, messages, fallback="")
 
-    if not _DISABLE_BENCH_STABILIZATION:
+    if _ENABLE_BENCH_STABILIZATION:
         final_answer = _stabilize_benchmark_answer(query, final_answer)
     else:
-        logger.info("Benchmark answer stabilization disabled for strict rerun.")
+        logger.info("Benchmark answer stabilization OFF (default).")
     logger.info("Query trace (%d steps):\n%s", len(query_trace), json.dumps(query_trace, indent=2))
     return {"answer": final_answer, "query_trace": query_trace}
 
