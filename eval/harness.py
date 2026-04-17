@@ -40,11 +40,15 @@ def _mcp_is_up() -> bool:
         return False
 
 
-def _start_mcp_server() -> Optional[subprocess.Popen]:
+def _start_mcp_server(db_config_path: Optional[str] = None) -> Optional[subprocess.Popen]:
     """
     Start the MCP server as a background subprocess if it is not already running.
     Returns the Popen handle so the caller can stop it, or None if it was already up.
     Logs a warning and returns None if startup fails — agent falls back to direct drivers.
+
+    When db_config_path is set, passes ORACLE_FORGE_REGISTER_ONLY_DB_CONFIG so the MCP
+    server registers only that dataset's logical DB names. Otherwise many datasets
+    share keys like metadata_database and the last-registered file wins (wrong tables).
     """
     if _mcp_is_up():
         print("[harness] MCP server already running.", flush=True)
@@ -54,11 +58,15 @@ def _start_mcp_server() -> Optional[subprocess.Popen]:
         raise RuntimeError(f"MCP server script not found at {MCP_SERVER_SCRIPT}")
 
     print("[harness] Starting MCP server ...", flush=True)
+    env = os.environ.copy()
+    if db_config_path:
+        env["ORACLE_FORGE_REGISTER_ONLY_DB_CONFIG"] = str(Path(db_config_path).resolve())
     proc = subprocess.Popen(
         [sys.executable, str(MCP_SERVER_SCRIPT)],
         cwd=str(REPO_ROOT),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
+        env=env,
     )
 
     deadline = time.monotonic() + 10
@@ -381,7 +389,7 @@ def run_harness(
     results: List[Dict[str, Any]] = []
     passed_n = 0
 
-    mcp_proc = _start_mcp_server() if not dummy else None
+    mcp_proc = _start_mcp_server(db_config_path) if not dummy else None
     try:
         for qdir in query_dirs:
             qid = qdir.name

@@ -46,6 +46,8 @@ db.collection.aggregate([
 ## Pattern 3: DuckDB Analytical SQL
 DuckDB supports advanced analytical SQL beyond standard PostgreSQL.
 
+**Reserved names as columns:** If a table has a column literally named `FILTER` (common in mutation VCF-style data), compare with quotes: `"FILTER" = 'PASS'`.
+
 ```sql
 -- Window functions for running totals
 SELECT ticker, date,
@@ -68,6 +70,12 @@ SELECT * FROM read_csv_auto('file.csv');
 
 ## Pattern 4: PostgreSQL Queries
 Standard SQL with PostgreSQL-specific features.
+
+**Mixed-case / camelCase columns:** PostgreSQL lowercases unquoted identifiers. If a column was created as `titleFull`, `titlePart`, or `childGroups`, you **must** quote it in SQL:
+
+```sql
+SELECT symbol, "titleFull", "titlePart" FROM cpc_definition WHERE level = 4;
+```
 
 ```sql
 -- ILIKE for case-insensitive text search

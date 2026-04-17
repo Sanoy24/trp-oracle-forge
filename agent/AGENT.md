@@ -1,6 +1,6 @@
 # AGENT.md — Oracle Forge Data Analytics Agent
 # Load this file at session start. It is your operating context.
-# Last updated: 2026-04-15
+# Last updated: 2026-04-17
 
 ---
 
@@ -84,3 +84,49 @@ Diagnose before retrying:
 - **Data quality issue?** — mixed date formats, serialized string values, null foreign keys.
 - **Wrong field type?** — some numeric or boolean fields are stored as strings; cast before arithmetic.
 - **Wrong calculation method?** — check CORRECTIONS LOG for known methodology fixes (e.g. DCA vs buy-and-hold, intraday vs day-over-day returns).
+
+---
+
+## 6. PostgreSQL: quoted identifiers (mandatory)
+
+PostgreSQL folds **unquoted** identifiers to lowercase. Columns created with mixed-case or camelCase names (e.g. `titleFull`, `titlePart`, `childGroups`) **must** be referenced with double quotes in SQL:
+
+```sql
+SELECT symbol, "titleFull", level FROM cpc_definition WHERE level = 4;
+```
+
+If you see `column "titlefull" does not exist` with a hint about `titleFull`, add the quotes.
+
+---
+
+## 7. DuckDB: reserved words as column names
+
+Some schemas use `FILTER` or other reserved tokens as column names. Reference them with double quotes: `"FILTER" = 'PASS'`.
+
+---
+
+## 8. Multi-engine questions (SQLite + DuckDB / Postgres + DuckDB)
+
+You cannot `JOIN` a table in SQLite to a table in DuckDB in one SQL string. Pattern:
+
+1. Query SQLite/Postgres for keys or filters; collect IDs or tuples.
+2. Pass those values into the second query (IN list, or merge in reasoning).
+3. For large sets, use subqueries or temp filters in the **same** engine only.
+
+---
+
+## 9. Answers that require human-readable names
+
+When the question asks for a **song title**, **business name**, **CPC title**, etc., the final answer must include that string from the source table — not only a numeric `track_id` or internal code. After aggregating in DuckDB, look up the display name in SQLite (or Postgres) using the join key.
+
+---
+
+## 10. Geography-filtered rankings (stock indices and similar)
+
+Build the **eligible symbol set** from metadata (`index_info` / exchange) **before** ranking on trade data. Do not rank symbols that belong to exchanges outside the region named in the question. For multi-symbol list answers, include every required symbol from the filtered set after ranking.
+
+---
+
+## 11. Operational harness note (MCP)
+
+Benchmark runs should start the MCP server with **one** dataset’s `db_config.yaml` registered so logical names like `metadata_database` map to the correct files. If you see “Available: […]” listing wrong tables or `no such table` errors for tables that exist in the dataset docs, assume the MCP registry was misconfigured — prefer introspection (`sqlite_master`, `information_schema`) on the connection you actually have.

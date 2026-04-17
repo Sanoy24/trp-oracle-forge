@@ -533,6 +533,90 @@ Verification note:
 
 ---
 
+## Entry 024 — MCP logical DB registry per dataset
+
+Metadata:
+- confidence: high
+- datasets_seen: (all multi-engine DAB datasets)
+- expires_after_runs: 20
+
+Failure pattern:
+- Queries hit the wrong SQLite/DuckDB file: “no such table” for tables that exist in the dataset docs, or `Available:` lists unrelated logical names.
+
+Root cause:
+- Multiple `db_config.yaml` files reuse the same logical `db_name` (e.g. `metadata_database`). Registering every config at once causes last-wins overwrites.
+
+Correct approach:
+- Run the MCP server with a **single** active `db_config.yaml` for the benchmark dataset (harness sets `ORACLE_FORGE_REGISTER_ONLY_DB_CONFIG` when starting MCP).
+
+Verification note:
+- After startup, `Available:` should only include connections for the current dataset.
+
+---
+
+## Entry 025 — PostgreSQL camelCase columns
+
+Metadata:
+- confidence: high
+- datasets_seen: patents, pancancer_atlas, crmarenapro
+- expires_after_runs: 20
+
+Failure pattern:
+- `column "foo" does not exist` with HINT referencing a mixed-case name.
+
+Root cause:
+- Unquoted identifiers are folded to lowercase.
+
+Correct approach:
+- Use double-quoted identifiers in SQL: `"titleFull"`, `"titlePart"`.
+
+Verification note:
+- Re-run the same query with quotes; column should resolve.
+
+---
+
+## Entry 026 — DuckDB `FILTER` column vs keyword
+
+Metadata:
+- confidence: high
+- datasets_seen: pancancer_atlas
+- expires_after_runs: 20
+
+Failure pattern:
+- Syntax errors or wrong filter when comparing mutation quality.
+
+Root cause:
+- Column named `FILTER` clashes with SQL keyword.
+
+Correct approach:
+- Quote the column: `"FILTER" = 'PASS'`.
+
+Verification note:
+- Predicate applies without parser errors.
+
+---
+
+## Entry 027 — Final answer shape: titles not only IDs
+
+Metadata:
+- confidence: high
+- datasets_seen: music_brainz_20k, bookreview, patents
+- expires_after_runs: 20
+
+Failure pattern:
+- Validator expects a natural-language title or label; output only numeric IDs.
+
+Root cause:
+- Aggregation stopped at surrogate keys.
+
+Correct approach:
+- After computing the winning id(s), join or lookup to emit the required **title/name/label** string from the catalog table.
+
+Verification note:
+- Final string contains human-readable tokens from the source row.
+
+---
+
 ## Template
 
 Metadata:

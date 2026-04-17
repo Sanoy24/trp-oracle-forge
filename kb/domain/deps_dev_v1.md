@@ -112,9 +112,9 @@ Stars and fork count are embedded inside `project_info.Project_Information` as n
 ## Query Strategy Playbook
 
 ### 1) Package-to-project attribution
-1. Normalize `(System, Name, Version)` in both sources (trim/case policy).
-2. Join `packageinfo` to `project_packageversion` on all three fields.
-3. Join resulting `ProjectName` to `project_info`.
+1. Run **SQLite** `packageinfo` queries first to get `(System, Name, Version)` rows that satisfy filters (license, release flags, etc.).
+2. For each candidate tuple, query **DuckDB** `project_packageversion` — you cannot reference `packageinfo` inside a DuckDB `query_duckdb` call.
+3. Join resulting `ProjectName` to `project_info` in DuckDB using real column names (`Project_Information`, not guessed names).
 4. Track unmatched package versions separately.
 
 ### 2) Security and license analysis

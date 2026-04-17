@@ -4,6 +4,12 @@ This document is injected into the agent's Domain Knowledge context layer before
 
 ---
 
+## PostgreSQL identifier rule
+
+The `cpc_definition` table uses mixed-case column names (`titleFull`, `titlePart`, `childGroups`, `dateRevised`, …). In `query_postgres` SQL, **always** double-quote those identifiers, e.g. `SELECT symbol, "titleFull" FROM cpc_definition`.
+
+---
+
 ## Dataset Overview
 
 Two active databases. Patent publication records live in SQLite, CPC classification definitions live in PostgreSQL.

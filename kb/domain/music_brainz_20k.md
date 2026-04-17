@@ -14,6 +14,9 @@
 - SQLite `tracks.track_id` → DuckDB `sales.track_id`
 - Format is consistent — direct integer/string match. **No prefix mismatch.**
 
+### Final answers naming tracks
+If the question asks **which song** (title/artist), output the **title (and artist if required)** from `tracks` after you identify the winning `track_id` from `sales`. Numeric-only answers often fail validation.
+
 ---
 
 ## CRITICAL: Entity Resolution Required

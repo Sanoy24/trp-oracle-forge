@@ -159,7 +159,8 @@ TOOLS = [
             "name": "query_duckdb",
             "description": (
                 "Run a SQL query against a DuckDB database. "
-                "Supports analytical SQL including TRY_STRPTIME, window functions, CTEs."
+                "Supports analytical SQL including TRY_STRPTIME, window functions, CTEs. "
+                "Quote reserved-word column names (e.g. \"FILTER\") when they are actual columns."
             ),
             "parameters": {
                 "type": "object",
@@ -207,7 +208,9 @@ TOOLS = [
             "name": "query_postgres",
             "description": (
                 "Run a SQL query against a PostgreSQL database. "
-                "Supports standard SQL and PostgreSQL-specific functions."
+                "Supports standard SQL and PostgreSQL-specific functions. "
+                "Quote mixed-case column names with double quotes (e.g. \"titleFull\", \"titlePart\") — "
+                "unquoted identifiers are lowercased and will not match camelCase columns."
             ),
             "parameters": {
                 "type": "object",
@@ -218,7 +221,7 @@ TOOLS = [
                     },
                     "sql": {
                         "type": "string",
-                        "description": "SQL query to execute"
+                        "description": "SQL query to execute (use \"columnName\" for camelCase columns)"
                     }
                 },
                 "required": ["db_name", "sql"]

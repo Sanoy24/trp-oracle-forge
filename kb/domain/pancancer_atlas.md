@@ -6,12 +6,12 @@ This document is injected into the agent's Domain Knowledge context layer before
 
 ## Dataset Overview
 
-Two active databases. Clinical data lives in PostgreSQL, molecular profiling data lives in SQLite.
+Two active databases. Clinical data lives in PostgreSQL; molecular data (mutations, expression) is served as **`molecular_database`** in the harness — the engine is **whatever `db_config.yaml` declares** (often DuckDB). Always follow the **DATABASE DESCRIPTION** for the active run.
 
-| Database | Format | What it contains |
-|----------|--------|-----------------|
+| Database | Typical engine | What it contains |
+|----------|----------------|------------------|
 | `clinical_database` | PostgreSQL | Patient clinical metadata — demographics, cancer type, survival |
-| `molecular_database` | SQLite | Mutation data and RNA expression per patient |
+| `molecular_database` | Often DuckDB | Mutation data and RNA expression per patient |
 
 ---
 
@@ -22,17 +22,16 @@ Two active databases. Clinical data lives in PostgreSQL, molecular profiling dat
 #### `clinical_info` table
 | Field | Notes |
 |-------|-------|
-| `Patient_description` | Patient identifier — links to `ParticipantBarcode` in molecular tables |
-| 100+ other attributes | Cancer type acronym, demographics, diagnosis, treatment outcomes, survival status |
+| Patient identifier column(s) | Name varies — use live introspection (`information_schema.columns` / sample `SELECT * LIMIT 3`) |
+| Diagnosis / cancer cohort | Often stored under acronym or text fields — filter using values **present in the table** (e.g. project code in diagnosis fields) |
+| Demographics, survival, histology | Column names vary; never assume `gender` or `ParticipantBarcode` exists without checking |
 
-> The full field list is not enumerated in the schema. Use `Patient_description` as the join key to molecular data.
+> Join keys to molecular `ParticipantBarcode` must be discovered from actual columns in **both** databases. If a query on assumed column names returns “column does not exist”, introspect and retry.
 
-### SQLite — `molecular_database`
-
-#### `Mutation_Data` table
+### Molecular database — `Mutation_Data` table
 | Field | Type | Notes |
 |-------|------|-------|
-| `ParticipantBarcode` | str | Patient identifier — links to `clinical_info.Patient_description` |
+| `ParticipantBarcode` | str | Patient/sample barcode — align to clinical rows via introspected join rule |
 | `Tumor_SampleBarcode` | str | Tumor sample identifier |
 | `Tumor_AliquotBarcode` | str | Tumor aliquot identifier |
 | `Normal_SampleBarcode` | str | Normal control sample identifier |
@@ -43,12 +42,12 @@ Two active databases. Clinical data lives in PostgreSQL, molecular profiling dat
 | `Variant_Classification` | str | e.g. `Missense_Mutation`, `Nonsense_Mutation` |
 | `HGVSc` | str | Coding DNA sequence mutation annotation |
 | `CENTERS` | str | Contributing sequencing center |
-| `FILTER` | str | `PASS` = reliable mutation call |
+| `FILTER` | str | `PASS` = reliable mutation call — in SQL use `"FILTER"` (quoted) because `FILTER` is a reserved word |
 
 #### `RNASeq_Expression` table
 | Field | Type | Notes |
 |-------|------|-------|
-| `ParticipantBarcode` | str | Patient identifier — links to `clinical_info.Patient_description` |
+| `ParticipantBarcode` | str | Patient/sample barcode — align to clinical rows via introspected join rule |
 | `SampleBarcode` | str | Sample identifier |
 | `AliquotBarcode` | str | Aliquot identifier |
 | `SampleTypeLetterCode` | str | Sample type abbreviation |
@@ -61,26 +60,23 @@ Two active databases. Clinical data lives in PostgreSQL, molecular profiling dat
 
 ## Cross-Database Join Keys
 
-`clinical_info.Patient_description` ↔ `Mutation_Data.ParticipantBarcode` ↔ `RNASeq_Expression.ParticipantBarcode`
-
-All three refer to the same patient. Match directly by value.
+1. List clinical identifier columns and molecular `ParticipantBarcode` samples.
+2. Define the mapping rule (exact match, substring, or normalized barcode) from **observed** values.
+3. Query each engine separately; merge cohorts in your reasoning — **no cross-engine SQL JOIN**.
 
 ---
 
 ## Data Semantics
 
 ### Gene Expression — Log Transform
-Average log10-transformed expression is computed as:
-```
-mean(log10(normalized_count + 1))
-```
-The `+1` is mandatory — `normalized_count` can be 0, and `log10(0)` is undefined.
+Use the transform the **question** specifies. If it asks for `log10(normalized_count)` without `+1`, follow the prompt; if values can be zero, handle zeros explicitly. When in doubt, match the prompt wording exactly.
 
 ### Chi-Square Statistic
 ```
 χ² = Σ (Oij - Eij)² / Eij
 Eij = (row_total × col_total) / grand_total
 ```
+When the question asks for the statistic, the **final answer must be a single numeric value** (and any requested ancillary labels), not a long narrative table of intermediate counts.
 
 ### Cancer Type Acronyms
 | Acronym | Full Name |
@@ -95,7 +91,7 @@ Use these when filtering by cancer type — the `clinical_info` table stores the
 Some questions reference standardized histology or morphology **codes** (for example ICD-O style tokens). Column names vary — use **live schema introspection** on `clinical_info` to locate the fields that store histology/morphology text or codes. When emitting an answer that must repeat such a code, copy the token **verbatim** from the selected row.
 
 ### Mutation Filter
-Only use mutations where `FILTER = 'PASS'` unless the query explicitly asks for all mutations.
+Only use reliable mutation rows where the quality column equals `PASS` unless the query asks otherwise. In SQL: `"FILTER" = 'PASS'`.
 
 ---
 

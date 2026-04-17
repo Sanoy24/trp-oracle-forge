@@ -26,8 +26,9 @@ MongoDB `business` does not expose normalized `city`/`state` columns in many rec
 Location is often encoded in `description` text and must be parsed before filtering/grouping.
 
 However, when the question is explicitly about **U.S. state**, first check for a structured top-level field:
-- Prefer `business.state` (top-level) if present.
+- Prefer `business.state` or `business.full_state` (top-level) if present and non-null.
 - Do not assume `attributes.State` exists (often null/missing).
+- MongoDB `$group` by `$state` can yield `_id: null` when state is missing — prefer filtering businesses that have a non-empty state field before grouping, or use a fallback field from introspection.
 - If the final answer must mention a state, include the **exact** token stored in `business.state` (usually the two-letter abbreviation). When unsure, output the abbreviation — many validators accept both abbreviated and full state names only if those exact strings appear in the answer text.
 
 Example extraction pattern:
@@ -51,7 +52,7 @@ In aggregation workflows, use regex/text functions over `description` instead of
 
 Common checks:
 - WiFi: detect string content robustly (for example, free/paid variants).
-- Credit card acceptance: normalize boolean-like strings.
+- Credit card acceptance: normalize boolean-like strings (`true`/`false`, `yes`/`no`, `1`/`0`) — **match how values appear in documents**, not only the string `"Yes"`.
 - Parking flags: nested values may require parsing.
 
 Do not assume a single consistent Python type across all records.
