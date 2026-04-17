@@ -20,25 +20,19 @@ There is no direct relational foreign key between the two tables. Region/country
 
 ---
 
-## Symbol Mapping Reference
+## Region/Exchange Resolution
 
-The following symbol-to-exchange mappings are schema context and can be used for joins/filters:
+Resolve symbol geography from data at runtime instead of relying on pre-listed winners.
 
-| Symbol | Exchange | Country | Region |
-|--------|----------|---------|--------|
-| 399001.SZ | Shenzhen Stock Exchange | China | Asia |
-| 000001.SS | Shanghai Stock Exchange | China | Asia |
-| N225 | Tokyo Stock Exchange | Japan | Asia |
-| HSI | Hong Kong Stock Exchange | Hong Kong | Asia |
-| NSEI | National Stock Exchange of India | India | Asia |
-| TWII | Taiwan Stock Exchange | Taiwan | Asia |
-| GSPTSE | Toronto Stock Exchange | Canada | North America |
-| NYA | New York Stock Exchange | United States | North America |
-| IXIC | NASDAQ | United States | North America |
-| GDAXI | Frankfurt Stock Exchange (XETRA) | Germany | Europe |
-| N100 | Euronext | France/Europe | Europe |
-| SSMI | SIX Swiss Exchange | Switzerland | Europe |
-| J203.JO | Johannesburg Stock Exchange | South Africa | Africa |
+Recommended pattern:
+
+```sql
+SELECT Exchange, Currency
+FROM index_info;
+```
+
+Then build region grouping logic from exchange names in your query plan.
+Do not hardcode final winners or ranked outputs.
 
 ---
 

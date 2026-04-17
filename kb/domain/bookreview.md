@@ -110,12 +110,14 @@ WHERE review_time >= '2020-01-01'
 
 ---
 
-## Query Patterns (No Answer Keys)
+## Query Patterns (Leakage-Safe)
 
-| Query | Required computation | Key Constraint |
-|-------|----------------------|----------------|
-| Q1: Decade with highest avg rating (≥10 distinct books) | Extract publication year, derive decade, aggregate avg rating by decade | decade computed from details/subtitle text |
-| Q2: Literature/Fiction books with perfect avg | Filter category, join to review DB, keep groups with AVG(rating)=5 | categories LIKE '%Literature & Fiction%' |
-| Q3: Children's books with ≥4.5 avg since 2020 | Filter category + date, aggregate by purchase/book | categories LIKE '%Children''s Books%', review_time >= '2020' |
+Use these generic patterns instead of query-labeled templates:
+
+| Pattern | Required computation | Key Constraint |
+|---------|----------------------|----------------|
+| Decade-level rating analysis | Extract publication year, derive decade, aggregate ratings | decade must be parsed from text fields (details/subtitle) |
+| Category-constrained rating quality | Filter by category in PostgreSQL, join to SQLite reviews, apply HAVING threshold | categories stored as JSON-array string, use LIKE/ILIKE |
+| Time-windowed high-rating selection | Filter reviews by date window, aggregate by purchase/book id | review_time filter must be applied before final aggregation |
 
 Do not rely on memorized title lists. Always derive outputs from live query results.
