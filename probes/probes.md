@@ -5,25 +5,32 @@
 
 ## Logging Policy (Reproducible Status)
 
-For every probe update, record both statuses:
+Official status for every probe is **Strict status** only:
 
-1. **Strict status**: PASS/FAIL from raw model output.
-2. **Repaired status**: PASS/FAIL after optional ground-truth repair fallback.
+1. **Strict status**: PASS/FAIL from raw model output (no fallback).
+
+Optional diagnostic status (historical only):
+
+2. **Repaired status**: PASS/FAIL after optional repair fallback.
 
 Do not mark a probe as fully fixed unless strict status is PASS.
-If repaired status is PASS but strict is FAIL, mark as **Operational pass / Model pending**.
+If repaired status is PASS but strict is FAIL, mark as **Diagnostic pass / Official fail**.
 
 Required evidence for each status update:
 
 - `run_id` from `eval/score_log.json`
 - dataset + query id
 - `strict_validation_message`
-- `validation_message`
-- `repaired` flag
+- `validation_message` (optional diagnostic)
+- `repaired` flag (optional diagnostic)
 
 Template for new status lines:
 
-`Run: <run_id> | Strict: <PASS/FAIL> | Repaired: <PASS/FAIL> | repaired=<true/false> | note: <reason>`
+`Run: <run_id> | Strict: <PASS/FAIL> | Official: <PASS/FAIL> | note: <reason>`
+
+Optional diagnostic line:
+
+`Diagnostic: Repaired=<PASS/FAIL> | repaired=<true/false> | note: <reason>`
 
 ---
 
