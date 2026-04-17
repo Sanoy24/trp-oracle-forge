@@ -96,6 +96,10 @@ python eval/harness.py --dataset bookreview --agent-module agent.data_agent --da
 
 # Strict no-leakage full benchmark (all 12 datasets, isolated score log)
 ./scripts/run_full_benchmark_strict.sh
+
+# Optional preflight checks (KB discoverability + leakage lint)
+python scripts/check_kb_integrity.py --strict
+python scripts/lint_kb_no_leakage.py --strict
 ```
 
 Non-obvious dependency:

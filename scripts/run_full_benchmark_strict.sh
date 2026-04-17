@@ -42,6 +42,7 @@ echo "datasets:   ${DATASETS[*]}"
 echo
 
 python3 scripts/lint_kb_no_leakage.py --strict
+python3 scripts/check_kb_integrity.py --strict
 
 if [[ "$RESET_LOG" == "1" ]]; then
   echo "[]" > "$SCORE_LOG"

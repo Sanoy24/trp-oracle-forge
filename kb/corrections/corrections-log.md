@@ -13,9 +13,21 @@ Format:
 - Correct approach
 - Verification note
 
+Entry metadata (recommended for every new entry):
+- `confidence`: low | medium | high
+- `last_verified_run_id`: run id from score log where rule was last validated
+- `datasets_seen`: list of datasets where the pattern was observed
+- `owner`: person responsible for maintenance
+- `expires_after_runs`: review threshold for freshness
+
 ---
 
 ## Entry 001 — Cross-DB Key Normalization
+
+Metadata:
+- confidence: high
+- datasets_seen: yelp, bookreview, crmarenapro
+- expires_after_runs: 20
 
 Failure pattern:
 - Cross-database joins return zero rows even though related entities exist.
@@ -34,6 +46,11 @@ Verification note:
 
 ## Entry 002 — Mixed Datetime Formats
 
+Metadata:
+- confidence: high
+- datasets_seen: yelp, stockindex, stockmarket
+- expires_after_runs: 20
+
 Failure pattern:
 - Time-filtered counts/aggregates are unexpectedly low.
 
@@ -50,6 +67,11 @@ Verification note:
 ---
 
 ## Entry 003 — Unstructured Location Fields
+
+Metadata:
+- confidence: medium
+- datasets_seen: yelp, googlelocal
+- expires_after_runs: 20
 
 Failure pattern:
 - City/state filters produce empty or partial results.
@@ -68,6 +90,11 @@ Verification note:
 
 ## Entry 004 — String-Typed Numeric/Boolean Fields
 
+Metadata:
+- confidence: high
+- datasets_seen: yelp, crmarenapro
+- expires_after_runs: 20
+
 Failure pattern:
 - Numeric comparisons or boolean logic behave incorrectly.
 
@@ -84,6 +111,11 @@ Verification note:
 ---
 
 ## Entry 005 — Serialized Nested Attributes
+
+Metadata:
+- confidence: high
+- datasets_seen: yelp
+- expires_after_runs: 20
 
 Failure pattern:
 - Attribute-based filters miss valid entities.
@@ -103,6 +135,11 @@ Verification note:
 
 ## Entry 006 — Avoid Average-of-Averages
 
+Metadata:
+- confidence: high
+- datasets_seen: yelp, stockmarket, bookreview
+- expires_after_runs: 20
+
 Failure pattern:
 - Final averages are biased high/low.
 
@@ -118,6 +155,11 @@ Verification note:
 ---
 
 ## Entry 007 — Output Formatting Compatibility
+
+Metadata:
+- confidence: high
+- datasets_seen: stockindex, yelp, bookreview
+- expires_after_runs: 20
 
 Failure pattern:
 - Semantically correct answer fails validation.
@@ -136,6 +178,11 @@ Verification note:
 
 ## Entry 008 — Single-Winner Query Discipline
 
+Metadata:
+- confidence: medium
+- datasets_seen: stockindex, stockmarket
+- expires_after_runs: 20
+
 Failure pattern:
 - Correct winner is present but response still fails.
 
@@ -152,6 +199,11 @@ Verification note:
 ---
 
 ## Entry 009 — Top-N Aggregation Completeness
+
+Metadata:
+- confidence: high
+- datasets_seen: yelp, github_repos, music_brainz_20k
+- expires_after_runs: 20
 
 Failure pattern:
 - Top categories/entities are incomplete or misordered.
@@ -170,6 +222,13 @@ Verification note:
 
 ## Template
 
+Metadata:
+- confidence:
+- last_verified_run_id:
+- datasets_seen:
+- owner:
+- expires_after_runs:
+
 Failure pattern:
 - 
 
@@ -181,3 +240,9 @@ Correct approach:
 
 Verification note:
 - 
+
+Promotion checklist (before marking a new rule as trusted):
+- Rule validated in at least 2 independent runs.
+- Rule improves strict pass behavior, not only repaired behavior.
+- Rule is phrased as reusable method, not query-specific hint.
+- Rule passes leakage lint checks.

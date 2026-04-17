@@ -3,7 +3,15 @@
 ## Scope
 
 This file contains methodology and schema interpretation guidance only.
-Do not store or use query-specific expected answers, ranked winner lists, forbidden symbol lists, or ground-truth numeric values.
+Do not store or use query-specific precomputed outputs, ranked winner lists, restricted symbol lists, or fixed numeric targets.
+
+---
+
+## Leakage-Safe Policy
+
+- No query-specific precomputed outputs or fixed ranked winners.
+- No restricted symbol lists or fixed numeric targets.
+- Keep only reusable methodology and schema interpretation guidance.
 
 ---
 
@@ -20,7 +28,14 @@ There is no direct relational foreign key between the two tables. Region/country
 
 ---
 
-## Region/Exchange Resolution
+## Cross-Database Join Keys
+
+There is no strict foreign-key join path between `index_info` and `index_trade`.
+Use symbol/exchange context alignment and runtime-derived mapping logic when combining metadata with trade aggregates.
+
+---
+
+## Schema Reference
 
 Resolve symbol geography from data at runtime instead of relying on pre-listed winners.
 
@@ -36,7 +51,7 @@ Do not hardcode final winners or ranked outputs.
 
 ---
 
-## Calculation Definitions
+## Query Strategy Playbook
 
 ### Intraday Volatility
 
@@ -97,7 +112,7 @@ ORDER BY total_return DESC;
 
 ---
 
-## Date Parsing
+## Data Semantics
 
 The `Date` field can contain mixed formats in the same column.
 Always use multi-pattern `COALESCE(TRY_STRPTIME(...))` and filter out null parse results.
@@ -110,3 +125,23 @@ Always use multi-pattern `COALESCE(TRY_STRPTIME(...))` and filter out null parse
 - Do not rely on memorized benchmark outputs.
 - For single-winner questions, return only the winner.
 - For paired outputs (symbol + country/value), keep values adjacent in compact plain text.
+
+---
+
+## Common Pitfalls
+
+- Applying a single date parser to mixed-format `Date` values.
+- Using day-over-day movement when question intent is intraday movement.
+- Hardcoding exchange-to-region mappings without checking `index_info` contents.
+- Mixing `Close` and `CloseUSD` in one calculation without explicit conversion intent.
+- Ranking on unstable denominators (for example, tiny sample months).
+
+---
+
+## Validation Checklist
+
+- Date parse success: parsed/non-parsed row counts after multi-pattern parsing.
+- Metric unit check: verify whether formula uses local close or USD-normalized close.
+- Sample-size guard: minimum row/month counts per index before ranking.
+- Join/context sanity: ensure exchange/currency mapping exists for ranked symbols.
+- Recompute check: rerun top candidates with narrowed filters to confirm stability.

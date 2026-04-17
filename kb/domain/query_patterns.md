@@ -181,3 +181,50 @@ GROUP BY ticker;
 
 -- Avoid SELECT * on large tables
 ```
+
+## Pattern 11: Deterministic Top-N Ranking
+Ranking outputs can drift across runs when ties are unresolved.
+
+```sql
+-- Prefer deterministic ordering with tie-breakers
+ORDER BY metric DESC, entity_id ASC
+```
+
+Use stable tie-breakers before LIMIT to avoid non-deterministic winners.
+
+## Pattern 12: Pagination Under Result Caps
+Tool responses are capped for context safety. Design queries to avoid silent truncation bias.
+
+```sql
+-- Prefer bounded projections and iterative windows
+SELECT id, metric
+FROM big_table
+WHERE <filters>
+ORDER BY id
+LIMIT 500 OFFSET 0;
+```
+
+When full coverage is required, iterate over pages and aggregate in application layer.
+
+## Pattern 13: Join Cardinality Audit
+Cross-DB joins should include a cardinality check before final aggregation.
+
+```
+1. Count left-side keys
+2. Count right-side keys
+3. Count matched keys after normalization
+4. If match rate is unexpectedly low, diagnose key format/type mismatch
+```
+
+This prevents silent zero/low-match failures.
+
+## Pattern 14: Runtime Health-Gated Execution
+Before expensive multi-step plans, run a quick health query per required tool/database.
+
+```
+1. Probe tool availability
+2. Execute a lightweight COUNT or LIMIT 1 query
+3. Abort early with explicit trace note on connectivity/auth failures
+```
+
+This reduces wasted iterations under MCP/API instability.

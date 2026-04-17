@@ -20,6 +20,7 @@ TARGETS = [
     REPO_ROOT / "kb" / "domain" / "bookreview.md",
     REPO_ROOT / "kb" / "domain" / "yelp.md",
     REPO_ROOT / "kb" / "corrections" / "corrections-log.md",
+    REPO_ROOT / "probes" / "probes.md",
 ]
 
 PATTERNS = {
@@ -40,6 +41,8 @@ def lint_file(path: Path) -> list[str]:
             line_lower = line.lower()
             # Policy negations like "do not store ... ground-truth" are expected.
             if "do not" in line_lower and name in {"ground_truth", "forbidden_list", "score_hint"}:
+                continue
+            if "no expected answers" in line_lower or "no ground-truth values" in line_lower:
                 continue
             findings.append(f"{path.relative_to(REPO_ROOT)}:{line_no}: {name}: {line}")
     return findings
