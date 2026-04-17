@@ -9,14 +9,19 @@
 
 ---
 
+
 ## Cross-Database Join Keys
+=======
+
 
 - MongoDB `articles.article_id` → SQLite `article_metadata.article_id`
 - Format is consistent across both databases — direct string equality works.
 
 ---
 
+
 ## Data Semantics
+
 
 Articles fall into exactly **4 categories:**
 
