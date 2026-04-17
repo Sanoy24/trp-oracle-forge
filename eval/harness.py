@@ -301,6 +301,31 @@ def print_summary_table(run: Dict[str, Any]) -> None:
     print()
 
 
+def _resolve_dataset_root(dab_root: Path, dataset: str) -> tuple[str, Path]:
+    """Resolve query_<dataset> directory case-insensitively.
+
+    This allows callers to pass dataset keys with mixed case (e.g. DEPS_DEV_V1)
+    while still locating the correct folder on disk (e.g. query_DEPS_DEV_V1).
+    """
+    requested = dataset.strip()
+    direct = dab_root / f"query_{requested}"
+    if direct.is_dir():
+        return requested, direct
+
+    requested_lower = requested.lower()
+    for cand in dab_root.glob("query_*"):
+        if not cand.is_dir():
+            continue
+        suffix = cand.name.replace("query_", "", 1)
+        if suffix.lower() == requested_lower:
+            return suffix, cand
+
+    raise FileNotFoundError(
+        f"Dataset directory not found for '{dataset}' under {dab_root}. "
+        "Expected a query_<dataset> folder."
+    )
+
+
 def run_harness(
     *,
     dataset: str,
@@ -311,10 +336,7 @@ def run_harness(
     run_id: Optional[str],
     score_log_path: Path,
 ) -> Dict[str, Any]:
-    dataset_key = dataset.strip().lower()
-    dataset_root = dab_root / f"query_{dataset_key}"
-    if not dataset_root.is_dir():
-        raise FileNotFoundError(f"Dataset directory not found: {dataset_root}")
+    dataset_key, dataset_root = _resolve_dataset_root(dab_root, dataset)
 
     db_config = dataset_root / "db_config.yaml"
     db_desc = dataset_root / "db_description.txt"

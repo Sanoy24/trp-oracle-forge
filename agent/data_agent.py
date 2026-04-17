@@ -783,12 +783,17 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
                 break
 
             # Record to query trace
+            preview_obj: Any
+            if result.get("success") is False and result.get("error"):
+                preview_obj = result.get("error")
+            else:
+                preview_obj = result.get("data", result.get("error", ""))
             query_trace.append({
                 "tool":    tool_name,
                 "args":    tool_args,
                 "success": result.get("success"),
                 "rows":    result.get("rows"),
-                "preview": str(result.get("data", result.get("error", "")))[:400]
+                "preview": str(preview_obj)[:400]
             })
 
             # Append tool result for next iteration

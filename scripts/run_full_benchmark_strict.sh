@@ -13,23 +13,35 @@ SCORE_LOG="${SCORE_LOG:-$REPO_ROOT/eval/score_log_strict_no_leakage.json}"
 SUMMARY_MD="${SUMMARY_MD:-$REPO_ROOT/results/score_summary_strict_no_leakage.md}"
 RESET_LOG="${RESET_LOG:-1}"
 
-DATASETS=(
-  agnews
-  bookreview
-  crmarenapro
-  DEPS_DEV_V1
-  GITHUB_REPOS
-  googlelocal
-  music_brainz_20k
-  PANCANCER_ATLAS
-  PATENTS
-  stockindex
-  stockmarket
-  yelp
-)
-
 export ORACLE_FORGE_STRICT_NO_LEAKAGE=1
+
+# Prefer OpenAI in strict mode (the agent/harness will still fall back if unset)
+export ORACLE_FORGE_LLM_PROVIDER="${ORACLE_FORGE_LLM_PROVIDER:-openai}"
+
+# Model handling:
+# - If MODEL is "openai/<name>", export OPENAI_MODEL="<name>"
+# - Otherwise, treat MODEL as the raw OpenAI model name (e.g. "gpt-4o-mini")
+if [[ "$MODEL" == openai/* ]]; then
+  export OPENAI_MODEL="${MODEL#openai/}"
+else
+  export OPENAI_MODEL="$MODEL"
+fi
+
+# Backwards compat (some components still read OPENROUTER_MODEL for logging)
 export OPENROUTER_MODEL="$MODEL"
+
+# Discover datasets from DAB_ROOT/query_* folders (preserves on-disk case).
+if [[ ! -d "$DAB_ROOT" ]]; then
+  echo "ERROR: DAB root not found: $DAB_ROOT" >&2
+  exit 1
+fi
+mapfile -t DATASETS < <(
+  cd "$DAB_ROOT"
+  for d in query_*; do
+    [[ -d "$d" ]] || continue
+    echo "${d#query_}"
+  done | sort
+)
 
 echo "== Oracle Forge Strict Benchmark Runner =="
 echo "repo:       $REPO_ROOT"
