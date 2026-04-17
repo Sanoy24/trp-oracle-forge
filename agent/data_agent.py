@@ -831,6 +831,23 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
     repeat_counts: dict[str, int] = {}
     forced_finalize = False
 
+    def _result_for_llm(result: dict) -> dict:
+        """Shrink tool results before adding them to the LLM conversation."""
+        if not isinstance(result, dict):
+            return {"success": False, "error": "non_dict_tool_result"}
+        out = {k: result.get(k) for k in ("success", "rows", "error") if k in result}
+        data = result.get("data")
+        if isinstance(data, list):
+            # Keep only a small sample; the full dataset is not needed in-context.
+            out["data"] = data[:50]
+            if len(data) > 50:
+                out["data_truncated"] = {"kept": 50, "original_len": len(data)}
+        elif isinstance(data, (str, int, float, bool)) or data is None:
+            out["data"] = data
+        else:
+            out["data"] = str(data)[:2000]
+        return out
+
     for iteration in range(MAX_ITERATIONS):
         logger.info("── Iteration %d/%d ──", iteration + 1, MAX_ITERATIONS)
 
@@ -896,7 +913,7 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
                 "role":         "tool",
                 "tool_call_id": tool_call.id,
                 "name":         tool_name,
-                "content":      json.dumps(result)
+                "content":      json.dumps(_result_for_llm(result), ensure_ascii=False)
             })
 
             # Prevent pathological loops: repeated identical call 3+ times.
