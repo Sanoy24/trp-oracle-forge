@@ -107,6 +107,7 @@ Important routing rule:
 ### Ratios and numeric checks
 
 Validators often search for a decimal that **rounds** to a target at fixed precision. Compute the ratio from explicit filtered counts on the same population, then emit the numeric result with enough digits that rounding matches the checker (commonly two decimal places).
+Do not convert a computed decimal into alternative forms (fraction text, prose explanation) unless explicitly requested.
 
 ### Repository path token fidelity
 When final answers require repo identifiers, emit exact `owner/repo` strings copied from source rows. Do not paraphrase, shorten, or alter separators/case.

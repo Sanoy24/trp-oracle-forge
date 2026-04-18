@@ -154,6 +154,7 @@ If queries against the `support` logical DB return `permission denied for table 
 - Cardinality guard: compare distinct business entities before/after joins.
 - Timestamp sanity: null/parse-failure rates for created/closed fields.
 - Metric consistency: verify at least one sampled owner/account trace end-to-end across DBs.
+- ID answer check: for ID-target questions, confirm final output token exists in final filtered candidate rows (not in pre-filter supersets).
 
 ---
 

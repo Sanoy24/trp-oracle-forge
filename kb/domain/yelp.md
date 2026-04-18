@@ -165,3 +165,4 @@ Split before counting/filtering event instances.
 - Aggregate denominator check: reviews vs businesses vs users clearly separated.
 - Type normalization audit: count rows requiring cast/fallback per key field.
 - Temporal parsing audit: parse-success rate across mixed date formats.
+- Final token check: for category/name outputs, ensure final tokens are copied from selected source fields (`name`, `categories`) and not inferred prose.

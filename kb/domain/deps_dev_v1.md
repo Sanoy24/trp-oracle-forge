@@ -154,6 +154,7 @@ Do not guess columns like `ProjectName` in `project_info`; DuckDB will throw bin
 - Timestamp sanity: min/max converted dates are plausible.
 - Advisory parsing: malformed JSON-like row count reported.
 - Rollup sanity: verify project-level totals against sampled package-version detail.
+- Top-N contract: when prompt asks for 5 (or N), verify final rendered list has exactly N items after dedupe.
 
 ---
 

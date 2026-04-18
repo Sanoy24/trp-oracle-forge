@@ -864,6 +864,102 @@ Verification note:
 
 ---
 
+## Entry 038 — Required list cardinality contract (Top-N must return N)
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-012
+- datasets_seen: deps_dev_v1, github_repos, googlelocal, yelp
+- expires_after_runs: 20
+
+Failure pattern:
+- Validator reports missing names/items when output includes only a subset of required entities.
+
+Root cause:
+- Final answer was produced from partial intermediate results or early-stop reasoning before all required rows were rendered.
+
+Correct approach:
+- If prompt asks for `top N`, enforce this contract before final output:
+  - final ranked result must contain at least N entities after dedupe,
+  - deterministic ordering with tie-breaker,
+  - render exactly N entities unless prompt says “up to N”.
+- If fewer than N exist, state all available entities only when explicitly allowed by the question.
+
+Verification note:
+- Output entity count matches requested cardinality and each token maps to final ranked rows.
+
+---
+
+## Entry 039 — Exact-value output, never ratio reformats unless requested
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-005
+- datasets_seen: agnews, stockmarket, yelp
+- expires_after_runs: 20
+
+Failure pattern:
+- Numeric checks fail when output uses transformed representation (`23/111`, rounded integer, or reformatted unit) instead of expected numeric literal.
+
+Root cause:
+- Post-processing rewrote computed values to alternate formats not accepted by validators.
+
+Correct approach:
+- Emit one canonical numeric literal consistent with computation result.
+- Do not convert decimal to fraction, percentage, or rounded integer unless prompt explicitly requests that format.
+- Keep numeric precision sufficient for tolerance-based matching.
+
+Verification note:
+- The numeric token in output equals the computed metric representation used for validation.
+
+---
+
+## Entry 040 — Candidate filtering must precede winner selection (avoid wrong entity IDs)
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-007
+- datasets_seen: crmarenapro, stockindex, stockmarket, yelp
+- expires_after_runs: 20
+
+Failure pattern:
+- Output returns plausible but wrong ID/entity (wrong agent, wrong state, wrong symbol).
+
+Root cause:
+- Winner selected from a superset before applying all constraints (time window, status, geography, policy condition).
+
+Correct approach:
+- Apply full eligibility filters first, then rank/select winner.
+- For ID outputs, verify the selected row still satisfies all predicates in the final filtered set.
+
+Verification note:
+- Re-running the final filtered query with `LIMIT 3` shows winner row at top and predicates satisfied.
+
+---
+
+## Entry 041 — Copy canonical taxonomy labels exactly (including qualifiers)
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-003
+- datasets_seen: pancancer_atlas, patents, yelp
+- expires_after_runs: 20
+
+Failure pattern:
+- Fuzzy/label misses for values with qualifiers or punctuation (parentheticals, semicolons, mixed case).
+
+Root cause:
+- Final output used normalized synonyms or truncated labels instead of canonical label text.
+
+Correct approach:
+- Render labels exactly from source fields selected in final result rows.
+- Preserve punctuation and qualifiers (for example parenthetical suffixes and semicolon-separated facets).
+
+Verification note:
+- Every emitted label is an exact substring from selected source rows.
+
+---
+
 ## Template
 
 Metadata:

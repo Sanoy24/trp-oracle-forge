@@ -109,6 +109,7 @@ When the final answer must name a CPC code, emit the **exact** `symbol` string f
 2. Left-join parsed symbols to `cpc_definition.symbol`.
 3. Prefer `titleFull` for semantic grouping; use `level` to control granularity.
 4. Keep unmatched symbols in diagnostics output to detect definition-table gaps.
+5. For final output, emit canonical CPC symbols/titles exactly as stored in source rows (no paraphrase of section labels).
 
 ### 2) Time-window analysis (filing/publication/grant)
 1. Normalize date strings with deterministic parsing (month-name + ordinal support).

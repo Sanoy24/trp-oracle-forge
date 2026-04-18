@@ -91,6 +91,7 @@ Use these when filtering by cancer type — the `clinical_info` table stores the
 Some questions reference standardized histology or morphology **codes** (for example ICD-O style tokens). Column names vary — use **live schema introspection** on `clinical_info` to locate the fields that store histology/morphology text or codes. When emitting an answer that must repeat such a code, copy the token **verbatim** from the selected row.
 
 For text labels with parenthetical qualifiers (for example `Mixed Histology (please specify)`), keep the full label exactly as stored; do not shorten to a base phrase.
+For code outputs (for example `9382/3` style tokens), preserve separators and punctuation exactly; do not normalize or strip characters.
 
 ### Mutation Filter
 Only use reliable mutation rows where the quality column equals `PASS` unless the query asks otherwise. In SQL: `"FILTER" = 'PASS'`.
