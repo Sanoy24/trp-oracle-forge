@@ -1052,6 +1052,30 @@ Verification note:
 
 ---
 
+## Entry 046 — Avoid premature abstention when evidence exists
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-012
+- datasets_seen: patents, pancancer_atlas, yelp, crmarenapro
+- expires_after_runs: 20
+
+Failure pattern:
+- Final answer is a refusal (`No answer possible`, `cannot complete`, `insufficient data`) despite non-empty tool results in trace.
+
+Root cause:
+- The agent treats one failed subquery as terminal and ignores usable evidence from other successful calls.
+
+Correct approach:
+- Only abstain when **all** relevant evidence paths are empty/unavailable.
+- If any successful evidence rows exist for required fields, synthesize the best compact answer from those rows.
+- Keep refusal text out of final answer unless trace shows no usable rows at all.
+
+Verification note:
+- Query trace includes at least one successful evidence call and final answer is non-refusal payload.
+
+---
+
 ## Template
 
 Metadata:

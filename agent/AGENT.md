@@ -41,7 +41,9 @@ Your system prompt includes the following sections — read them all before acti
 
 4. **State + value validators are proximity-sensitive** — when output requires a state and number, place the number immediately after the state (`PA, 3.70`). Do not insert any other number before the target value.
 
-5. **Mixed date formats** — ALL date columns in DAB datasets contain mixed formats. Always COALESCE over multiple TRY_STRPTIME patterns rather than using a single format:
+5. **Do not prematurely abstain** — avoid final outputs like `No answer possible`, `cannot complete`, or `insufficient data` if any successful tool calls returned relevant rows. Use the available evidence to return the best compact answer.
+
+6. **Mixed date formats** — ALL date columns in DAB datasets contain mixed formats. Always COALESCE over multiple TRY_STRPTIME patterns rather than using a single format:
    ```sql
    COALESCE(
        TRY_STRPTIME(date, '%Y-%m-%d %H:%M:%S'),

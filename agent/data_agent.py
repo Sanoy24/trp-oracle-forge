@@ -614,7 +614,9 @@ def _force_compact_final_answer(
                 "Stop calling tools. Based only on the tool results above, return the final answer now. "
                 "Output plain text only, no markdown, no explanation, no query trace. "
                 "If the question requires a complete list, include every item from the aggregated result, not a partial sample. "
-                "For single-winner questions, output only the winner."
+                "For single-winner questions, output only the winner. "
+                "Do not output refusal text like 'cannot complete', 'insufficient data', or 'no answer possible' "
+                "if evidence rows exist; return the best evidence-backed compact answer."
             ),
         }]
         resp = client.chat.completions.create(
@@ -646,6 +648,10 @@ def _needs_compaction(answer: str) -> bool:
         "assuming",
         "therefore",
         "final answer:",
+        "cannot complete",
+        "insufficient data",
+        "no answer possible",
+        "not available",
     )
     return any(m in lowered for m in narrative_markers)
 
