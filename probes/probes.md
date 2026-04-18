@@ -163,3 +163,29 @@ Evidence:
 - Do not add expected answers, winner identities, or numeric ground truth.
 - Convert every new failure into a mechanism-focused probe.
 - Retire probes that are consistently passing across 3 consecutive runs.
+
+---
+
+## Rubric five-field probe log (leakage-safe)
+
+Each row uses a **scenario paraphrase** instead of pasting copyrighted benchmark wording. **Observed** and **post-change outcome** describe classes of runs, not a single leaked validator string.
+
+| # | Query (scenario paraphrase) | Failure category | Expected failure | Observed agent response (pattern) | Fix applied + post-change verification |
+|---|----------------------------|------------------|------------------|-----------------------------------|-----------------------------------|
+| 1 | Cross-DB entity link with different ID prefixes | Ill-formatted key mismatch | Join yields 0 matched rows | Tool trace shows inner join with 0 rows after merge | `JoinKeyResolver` + MCP `normalize_join_key`; strict pass rate improves on cross-DB datasets |
+| 2 | Time window filter on mixed string dates | Multi-database routing / date quality | Counts far below true eligible set | Single `TRY_STRPTIME` in DuckDB | AGENT.md + corrections COALESCE pattern; fewer under-count failures |
+| 3 | Filter on nested serialized business attributes | Unstructured text extraction | Valid entities missing from filter | Attribute equality on raw dict string | corrections Entry 005 parsing path; higher recall on attribute filters |
+| 4 | City/state derived only from free-text description | Unstructured text extraction | Empty geographic groups | `_id: null` in `$group` | Regex + fallback parsers in domain KB; fewer empty-state answers |
+| 5 | Global average vs average of per-entity averages | Domain knowledge gap (metric semantics) | Biased numeric answer | AVG of grouped means | AGENT §12 + corrections 006; row-level aggregation guidance |
+| 6 | Top categories ranked from a truncated sample | Domain knowledge gap | Wrong top-N ordering | `LIMIT` before full aggregation | corrections 009 + Pattern 21; improved top-N stability |
+| 7 | Single winner question with runner-up text in answer | Output shape | Validator rejects extra symbols | Multiple tickers or names in plain text | AGENT §3 single-winner rule; stockindex pass rate gains |
+| 8 | Code + country pair beyond adjacency threshold | Output shape | Correct tokens but validator fails | Markdown or words between pair | AGENT §3 pair adjacency; formatting-only failures drop |
+| 9 | Mongo global max using `find` + preview cap | Multi-database routing | Wrong extremum | First page of docs taken as max | Tool doc + AGENT §12.5 aggregate `$sort`/`$limit`; fewer extrema errors |
+| 10 | SQLite + DuckDB joined in one SQL string | Multi-database routing | Parser error or wrong plan | One SQL referencing two engines | AGENT multi-engine pattern; routing failures reduced |
+| 11 | CRM IDs with `#` prefix and trailing spaces | Ill-formatted key mismatch | Join or filter drops rows | Literal string compare fails | `join_key_resolver` + SQL `REPLACE`; crmarenapro matches increase |
+| 12 | Postgres camelCase column without quotes | Query dialect | `column does not exist` | Lowercase error in trace | AGENT Postgres quoting + tool hints; fewer SQL hard fails |
+| 13 | DuckDB column named reserved word `FILTER` | Query dialect | Syntax error near FILTER | Unquoted token | Quote `"FILTER"` in KB + tool description; pancancer-style queries unblock |
+| 14 | MCP down mid-run | Runtime / tool reliability | All tools fail with transport error | Empty or error-only trace | Direct-driver fallback in `dispatch_tool`; higher completion rate |
+| 15 | Required exhaustive list answer | Output shape / aggregation | Partial list returned | `return_answer` before full merge | `_force_compact` + AGENT list completeness; list-style validators improve |
+
+Failure category mapping to DAB taxonomy: rows 1,11 → key mismatch; 2,9,10 → routing/dialect; 3,4 → unstructured extraction; 5,6,12,13 → knowledge/dialect gaps; 7,8,15 → output shape; 14 → runtime.

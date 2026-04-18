@@ -158,7 +158,7 @@ def _check_llm_api() -> Optional[str]:
 
     if llm_provider in ("openai", "open_ai") or (not llm_provider and has_openai):
         api_key = os.getenv("OPENAI_API_KEY", "")
-        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
         url = "https://api.openai.com/v1/chat/completions"
         if not api_key:
             return "OPENAI_API_KEY not set in environment or .env"
@@ -527,8 +527,18 @@ def run_harness(
         "failed": failed_n,
         "pass_at_1": pass_at_1,
         "agent_module": mod_name if not dummy else "dummy",
-        "dab_root": str(dab_root),
+        "dab_root": str(dab_root.resolve()),
         "results": results,
+        "methodology_notes": {
+            "harness_script": "eval/harness.py",
+            "validation": "Each query: agent subprocess → answer string → validate.py from DataAgentBench (no numeric repair layer).",
+            "timeout_sec": timeout_sec,
+            "strict_no_leakage": os.getenv("ORACLE_FORGE_STRICT_NO_LEAKAGE", ""),
+            "oracle_forge_llm_provider": os.getenv("ORACLE_FORGE_LLM_PROVIDER", ""),
+            "openai_model": os.getenv("OPENAI_MODEL", ""),
+            "openrouter_model": os.getenv("OPENROUTER_MODEL", ""),
+            "mcp_url_passed_to_child": bool(mcp_rpc_url),
+        },
     }
 
     append_score_log(score_log_path, run_record)

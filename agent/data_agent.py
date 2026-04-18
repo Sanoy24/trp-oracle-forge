@@ -909,7 +909,7 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
 
     if llm_provider in ("openai", "open_ai") or (not llm_provider and has_openai):
         client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
-        model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+        model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
         logger.info("LLM provider: openai")
     else:
         client = OpenAI(
@@ -962,7 +962,8 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
             )
         except Exception as exc:
             logger.error("LLM call failed: %s", exc)
-            return {"answer": f"Agent error: {exc}", "query_trace": query_trace}
+            # Do not surface raw API/exception strings to the user-facing answer path (rubric hygiene).
+            return {"answer": "The agent could not complete this request due to an upstream error. Retry later.", "query_trace": query_trace}
 
         msg = response.choices[0].message
 

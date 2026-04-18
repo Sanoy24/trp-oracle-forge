@@ -102,6 +102,36 @@ python scripts/check_kb_integrity.py --strict
 python scripts/lint_kb_no_leakage.py --strict
 ```
 
+### Data integrity (no benchmark leakage)
+
+- The agent does **not** post-process answers to match validator ground truth.
+- Keep `results/dab_results.json` free of hand-authored benchmark answers; generate it with `python results/build_results_json.py --dab-root <DataAgentBench>` after real runs (committed file may be an empty array until submission).
+- KB leakage lint: `python scripts/lint_kb_no_leakage.py --strict`.
+
+### Pre-push verification
+
+```bash
+python scripts/preflight_push_check.py --dab-root /path/to/DataAgentBench
+pytest tests/ -q
+# Optional — fails if large DB artifacts missing (git LFS):
+python scripts/preflight_push_check.py --dab-root /path/to/DataAgentBench --check-data-files
+```
+
+### Rubric map (where to look)
+
+| Rubric area | Evidence in repo |
+|-------------|-------------------|
+| Structure + reproducibility | This README; `agent/README.md`, `eval/README.md`, `kb/README.md`, `planning/README.md`, `utils/README.md`, `signal/README.md`, `probes/README.md`, `results/README.md` |
+| Agent + 4 DB types + trace | `agent/AGENT.md`, `agent/data_agent.py` (`query_*` tools, `query_trace` in harness output) |
+| Multi-layer context | `data_agent._build_system_prompt` — layers: protocol, core KB, corrections, domain, live schema, DB description |
+| Self-correcting execution | ReAct retries, MCP/direct fallback, join tools; user-facing answers avoid raw stack traces |
+| KB quality | `kb/architecture|domain|evaluation|corrections/**` + each subtree `CHANGELOG.md` |
+| Evaluation harness | `eval/harness.py` (pass@1, traces); score log entries include `methodology_notes` |
+| Probes | `probes/probes.md` (15+ mechanisms + rubric five-field table) |
+| Utils + tests | `utils/*.py`, `tests/test_*.py` (pytest) |
+| Submission | `results/README.md`, `results/dab_pr_link.txt` |
+| Planning / Signal | `planning/inception_*.md`, `signal/*_log.md` |
+
 Non-obvious dependency:
 - Use the `dabench` conda environment and ensure PostgreSQL `books_info` is loaded for `bookreview` (`DataAgentBench/query_bookreview/query_dataset/books_info.sql`).
 

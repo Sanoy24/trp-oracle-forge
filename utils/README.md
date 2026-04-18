@@ -12,7 +12,7 @@ Reusable utility modules shared across agent and evaluation workflows.
     resolver = JoinKeyResolver()
     canonical = resolver.normalize("businessid_42", target_type="integer")  # 42
     ```
-  - Test: `utils/tests/test_join_key_resolver.py`
+  - Test: `tests/test_join_key_resolver.py`
 
 - `utils/multi_pass_retrieval.py`
   - Purpose: suggest and inject targeted KB documents after failed attempts, then retry with enriched context.
@@ -22,7 +22,7 @@ Reusable utility modules shared across agent and evaluation workflows.
     retriever = MultiPassRetriever(kb_root="kb")
     doc = retriever.suggest_document("why 0 rows?", "join returned zero rows")
     ```
-  - Test: `utils/tests/test_multi_pass_retrieval.py`
+  - Test: (optional) extend `tests/` with retrieval tests when KB fixtures are added
 
 - `utils/injection_tester.py`
   - Purpose: run KB injection tests (document + question + expected keywords), batch execution, and markdown report generation.
@@ -32,7 +32,7 @@ Reusable utility modules shared across agent and evaluation workflows.
     tester = InjectionTester(provider="openrouter")
     result = tester.test("kb/domain/join_keys.md", "What key issue occurs?", ["businessid", "businessref"])
     ```
-  - Test: `utils/tests/test_injection_tester.py`
+  - Test: run `pytest tests/` — add dedicated injection tests when API keys available in CI
 
 # Shared Utility Library
 
@@ -249,5 +249,5 @@ harness.export_results(results, "results/team_oracle_forge_results.json")
 ## Running Tests
 
 ```bash
-pytest utils/tests/ -v
+pytest tests/ -v
 ```
