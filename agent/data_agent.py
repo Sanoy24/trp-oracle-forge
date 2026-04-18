@@ -630,6 +630,26 @@ def _force_compact_final_answer(
         return fallback
 
 
+def _needs_compaction(answer: str) -> bool:
+    """Heuristic: detect verbose narrative answers that often fail validators."""
+    text = (answer or "").strip()
+    if not text:
+        return False
+    if len(text) > 240:
+        return True
+    lowered = text.lower()
+    narrative_markers = (
+        "to answer this",
+        "i will",
+        "based on",
+        "from the sample",
+        "assuming",
+        "therefore",
+        "final answer:",
+    )
+    return any(m in lowered for m in narrative_markers)
+
+
 # ── System prompt builder ─────────────────────────────────────────────────────
 
 def _build_system_prompt(
@@ -1036,6 +1056,9 @@ def run_agent(query: str, db_config_path: str, db_description: str) -> str:
             final_answer = ""
         else:
             final_answer = _force_compact_final_answer(client, model, messages, fallback="")
+    elif (not _DISABLE_FORCE_COMPACT) and _needs_compaction(final_answer):
+        logger.info("Compacting verbose final answer for validator compatibility.")
+        final_answer = _force_compact_final_answer(client, model, messages, fallback=final_answer)
 
     logger.info("Query trace (%d steps):\n%s", len(query_trace), json.dumps(query_trace, indent=2))
     return {"answer": final_answer, "query_trace": query_trace}

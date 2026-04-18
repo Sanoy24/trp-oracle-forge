@@ -816,6 +816,54 @@ Verification note:
 
 ---
 
+## Entry 036 — Run-to-run stability: deterministic ordering before LIMIT
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-012
+- datasets_seen: yelp, stockindex, stockmarket, github_repos
+- expires_after_runs: 20
+
+Failure pattern:
+- Different runs return different winners/top lists even with same model and prompt.
+
+Root cause:
+- Queries apply `LIMIT` without a stable tie-breaker or use partially ordered outputs, so ties can flip.
+
+Correct approach:
+- Any ranked query must use deterministic ordering:
+  - primary metric DESC/ASC as required,
+  - stable secondary key (entity id/name) to break ties before `LIMIT`.
+- Apply ordering at the final ranking step (after all required filters/aggregations).
+
+Verification note:
+- Re-running the same query on unchanged data yields identical top rows.
+
+---
+
+## Entry 037 — Compact final output over narrative explanations
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-005
+- datasets_seen: agnews, yelp, crmarenapro
+- expires_after_runs: 20
+
+Failure pattern:
+- Answer contains long reasoning text; validator fails to detect required token/number even when reasoning suggests the right direction.
+
+Root cause:
+- The model returns analysis prose instead of the expected final payload format.
+
+Correct approach:
+- Return only final payload text (single value/token/list as requested).
+- Strip meta commentary like “from sample”, “I cannot determine”, or methodology notes from final line.
+
+Verification note:
+- Final answer fits in one compact line and directly matches validator target type.
+
+---
+
 ## Template
 
 Metadata:
