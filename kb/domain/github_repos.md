@@ -13,6 +13,11 @@ Two active databases. Repository metadata lives in SQLite, repository artifacts 
 | `metadata_database` | SQLite | Languages, licenses, watch counts per repo |
 | `artifacts_database` | DuckDB | File contents, commits, file-level metadata |
 
+Important routing rule:
+- `languages`, `licenses`, `repos` live in **SQLite** (`metadata_database`) only.
+- `contents`, `commits`, `files` live in **DuckDB** (`artifacts_database`) only.
+- If you query `languages` in DuckDB and see a `Catalog Error`, you used the wrong `db_name`.
+
 ---
 
 ## Schema Reference
@@ -131,6 +136,7 @@ Validators often search for a decimal that **rounds** to a target at fixed preci
 - Counting files after joining contents in a way that duplicates rows.
 - Treating truncated `content` as complete source text.
 - Confusing `watch_count` semantics with stars/forks.
+- Mixing up engines: querying SQLite-only tables in DuckDB (or vice versa) because both use SQL.
 - Ignoring `difference_truncated` and over-trusting commit-level change statistics.
 
 ---

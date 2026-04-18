@@ -19,6 +19,10 @@ Two active databases. Patent publication records live in SQLite, CPC classificat
 | `publication_database` | SQLite | Patent publication metadata — titles, abstracts, dates, CPC codes, citations |
 | `CPCDefinition_database` | PostgreSQL | Hierarchical CPC code definitions and titles |
 
+If you see tool errors like `Unknown SQLite db_name 'publication_database'. Available: []`:
+- Treat it as a **run wiring/config registration** failure (the dataset config wasn’t loaded), not a query mistake.
+- Fail fast and avoid repeated tool calls; they will all fail until the harness/MCP registers the correct `db_config.yaml`.
+
 ---
 
 ## Schema Reference

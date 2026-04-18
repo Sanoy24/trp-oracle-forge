@@ -70,6 +70,14 @@ articles = query_mongodb("articles_database", "articles", "find", "{}", '{"artic
 # Step 3: Count per category
 ```
 
+### Strict rule: no sampling / no extrapolation
+Validators expect exact values. Do not classify “a sample” of articles and extrapolate.
+
+Leakage-safe discipline:
+- First compute the **exact eligible article_id set** from SQLite (region/date/author filters).
+- Then classify **all** eligible articles (or apply deterministic keyword rules over all of them).
+- Finally compute exact counts/ratios from those exact totals.
+
 ### Filter by region or date
 Region and date are in SQLite `article_metadata`, not in MongoDB:
 ```python

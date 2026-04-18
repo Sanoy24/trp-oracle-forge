@@ -98,6 +98,13 @@ Do not skip steps — there is no direct link between `packageinfo` and `project
 ### GitHub Stars and Fork Count
 Stars and fork count are embedded inside `project_info.Project_Information` as natural language text — they are not separate columns. Use regex to extract numeric values.
 
+### DuckDB schema note: `project_info` has no explicit `ProjectName`
+`project_info` does **not** expose `ProjectName` as a standalone column. When you need to connect a `ProjectName` (from `project_packageversion`) to rows in `project_info`, you must:
+- Extract the `owner/repo` token from `Project_Information` (regex) and join on that extracted value, or
+- Filter `project_info.Project_Information` with `LIKE '%owner/repo%'` for a small candidate set, then extract numeric fields.
+
+Do not guess columns like `ProjectName` in `project_info`; DuckDB will throw binder errors.
+
 ### Timestamps
 `UpstreamPublishedAt` is a Unix timestamp in **milliseconds** — divide by 1000 to get seconds before converting to a date.
 

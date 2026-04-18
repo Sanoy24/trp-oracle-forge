@@ -617,6 +617,103 @@ Verification note:
 
 ---
 
+## Entry 028 — DuckDB binder/catalog errors: schema-first, don’t guess identifiers
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-001
+- datasets_seen: deps_dev_v1, github_repos
+- expires_after_runs: 20
+
+Failure pattern:
+- DuckDB queries fail with `Binder Error: Referenced column ... not found` or `Catalog Error: Table with name ... does not exist`.
+
+Root cause:
+- The query guessed table/column names or queried the wrong database connection (DuckDB vs SQLite).
+
+Correct approach:
+- When you see a binder/catalog error, immediately switch to schema discovery:
+  - For DuckDB: `SHOW TABLES;` then `DESCRIBE <table>;` (or query `information_schema.columns`) and copy identifiers exactly.
+  - If a table is expected to be in SQLite (metadata) but errors in DuckDB (artifacts), re-check the correct `db_name` and re-run in the right engine.
+- Treat “Candidate bindings” in the binder error as the authoritative list of available columns.
+
+Verification note:
+- The corrected query runs without binder/catalog errors and returns non-empty results for a sanity `LIMIT 5`.
+
+---
+
+## Entry 029 — Never estimate from tool previews (no sampling for exact metrics)
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-005
+- datasets_seen: agnews, github_repos, yelp, stockmarket
+- expires_after_runs: 20
+
+Failure pattern:
+- Numeric outputs (counts, ratios, averages) fail validation when the agent “samples” a subset (e.g. first 80/500 rows) and extrapolates.
+
+Root cause:
+- Tool results are capped for context safety; using the preview as the population yields biased results.
+
+Correct approach:
+- For **exact** metrics, design queries that compute the answer in-database:
+  - Use `COUNT(*)`, `SUM(...)`, `AVG(...)`, `GROUP BY`, `ORDER BY ... LIMIT` on the full eligible population.
+  - If classification is required (e.g. from text), compute the exact eligible ID set first, then classify **all** of those IDs (or implement deterministic keyword rules with full coverage), and count precisely.
+- Never emit “approximately”, “assuming representative”, or any extrapolated value.
+
+Verification note:
+- The final number is derived from exact counts over the complete eligible set (with explicit denominators).
+
+---
+
+## Entry 030 — Permission denied (PostgreSQL): treat as environment failure, pivot or fail fast
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-007
+- datasets_seen: crmarenapro
+- expires_after_runs: 20
+
+Failure pattern:
+- PostgreSQL queries fail with `permission denied for table ...` and the agent loops or fabricates an answer.
+
+Root cause:
+- The configured DB role lacks SELECT privileges on required tables (server-side setup issue), not an agent reasoning problem.
+
+Correct approach:
+- Do not retry the same query repeatedly.
+- Pivot to alternative sources if the question can be answered from other databases/tables that are accessible.
+- Otherwise, return a concise “cannot complete due to database permissions” answer rather than hallucinating.
+
+Verification note:
+- Trace shows a single permission error, a pivot attempt (if applicable), and no fabricated values.
+
+---
+
+## Entry 031 — SQLite `db_name` shows `Available: []`: config was not loaded / wrong dataset wiring
+
+Metadata:
+- confidence: high
+- last_verified_run_id: 2026-04-18-004
+- datasets_seen: patents
+- expires_after_runs: 20
+
+Failure pattern:
+- Tool error: `Unknown SQLite db_name 'X'. Available: []` (empty available list).
+
+Root cause:
+- The dataset `db_config.yaml` was not registered/loaded for the current run, or the agent is not receiving the correct dataset config path/description.
+
+Correct approach:
+- Treat this as a **run configuration** failure, not a query failure.
+- Fail fast with an explicit note that the logical DB registry is empty, and avoid further tool calls that will repeat the same error.
+
+Verification note:
+- On a fixed run configuration, `Available:` includes the expected dataset logical DB names and queries succeed.
+
+---
+
 ## Template
 
 Metadata:

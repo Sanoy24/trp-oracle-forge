@@ -128,8 +128,17 @@ GROUP BY OwnerId
 - Joining IDs without first removing leading `#` and surrounding whitespace.
 - Mixing cleaned and uncleaned IDs across intermediate query steps.
 - Assuming support-table casing is uniform; PostgreSQL identifiers may need quoting.
+- Treating `permission denied` as a reasoning issue and retrying indefinitely (it is a server role/GRANT issue).
 - Counting opportunities/orders after many-to-many joins without deduplication keys.
 - Computing SLA/resolution metrics from raw text timestamps without normalization.
+
+---
+
+## Support DB permissions failure mode (PostgreSQL)
+If queries against the `support` logical DB return `permission denied for table ...`:
+- This is an **environment configuration** problem (missing SELECT grants) and cannot be solved by better SQL alone.
+- Do not loop on the same failing query; pivot to other databases only if the question can be answered without `support`.
+- Otherwise, return a concise “cannot complete due to database permissions” response rather than fabricating values.
 
 ---
 
