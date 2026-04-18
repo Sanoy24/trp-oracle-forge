@@ -121,6 +121,11 @@ FROM Opportunity
 GROUP BY OwnerId
 ```
 
+### Output contract for validator-facing CRM queries
+- Month questions: return month name token only (for example `November`), no explanation.
+- Agent/product/knowledge questions: return canonical IDs exactly as stored (`005...`, `01t...`, `ka0...` etc.) when IDs are requested.
+- Do not answer with policy narrative (`no violation`) when the prompt asks for an identifier from matched records.
+
 ---
 
 ## Common Pitfalls
@@ -128,8 +133,21 @@ GROUP BY OwnerId
 - Joining IDs without first removing leading `#` and surrounding whitespace.
 - Mixing cleaned and uncleaned IDs across intermediate query steps.
 - Assuming support-table casing is uniform; PostgreSQL identifiers may need quoting.
+- Treating `permission denied` as a reasoning issue and retrying indefinitely (it is a server role/GRANT issue).
 - Counting opportunities/orders after many-to-many joins without deduplication keys.
 - Computing SLA/resolution metrics from raw text timestamps without normalization.
+
+---
+
+## Support DB permissions failure mode (PostgreSQL)
+If queries against the `support` logical DB return `permission denied for table ...`:
+- This is an **environment configuration** problem (missing SELECT grants) and cannot be solved by better SQL alone.
+- Do not loop on the same failing query; pivot to other databases only if the question can be answered without `support`.
+- Otherwise, return a concise “cannot complete due to database permissions” response rather than fabricating values.
+
+For prompts that explicitly require CRM IDs (agent/product/knowledge/issue):
+- Do not return `None` when an ID can be selected from accessible filtered candidates.
+- Apply full filters first, then pick deterministic winner (`ORDER BY metric DESC, Id ASC`) before final output.
 
 ---
 
@@ -140,6 +158,8 @@ GROUP BY OwnerId
 - Cardinality guard: compare distinct business entities before/after joins.
 - Timestamp sanity: null/parse-failure rates for created/closed fields.
 - Metric consistency: verify at least one sampled owner/account trace end-to-end across DBs.
+- ID answer check: for ID-target questions, confirm final output token exists in final filtered candidate rows (not in pre-filter supersets).
+- Month/ID output shape: when prompt requests month or single ID, output only that token (no narrative prefix/suffix).
 
 ---
 

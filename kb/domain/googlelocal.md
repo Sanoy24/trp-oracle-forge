@@ -5,7 +5,7 @@
 | Database | Type | Logical Name | Table | Key Fields |
 |----------|------|--------------|-------|------------|
 | business_description.sql | PostgreSQL | business_database | business_description | gmap_id, name, description, hours, status, review_count |
-| review_query.db | SQLite | review_database | review | gmap_id, reviewer_name, rating, text |
+| review_query.db | SQLite | review_database | review | (join column — **confirm with** `PRAGMA table_info(review)`), reviewer_name, rating, text |
 
 Data covers US-only Google Maps businesses and reviews through September 2021.
 
@@ -13,8 +13,8 @@ Data covers US-only Google Maps businesses and reviews through September 2021.
 
 ## Cross-Database Join Keys
 
-- PostgreSQL `business_description.gmap_id` → SQLite `review.gmap_id`
-- Format is consistent — direct string equality works. **No prefix mismatch.**
+- PostgreSQL `business_description.gmap_id` must match the SQLite review table’s business key column **as returned by introspection** (often same logical id; column name may differ from examples).
+- After discovering the column name, use direct string equality. **No prefix normalization** once keys align.
 
 ---
 

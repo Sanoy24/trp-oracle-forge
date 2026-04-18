@@ -4,6 +4,12 @@ This document is injected into the agent's Domain Knowledge context layer before
 
 ---
 
+## PostgreSQL identifier rule
+
+The `cpc_definition` table uses mixed-case column names (`titleFull`, `titlePart`, `childGroups`, `dateRevised`, …). In `query_postgres` SQL, **always** double-quote those identifiers, e.g. `SELECT symbol, "titleFull" FROM cpc_definition`.
+
+---
+
 ## Dataset Overview
 
 Two active databases. Patent publication records live in SQLite, CPC classification definitions live in PostgreSQL.
@@ -12,6 +18,10 @@ Two active databases. Patent publication records live in SQLite, CPC classificat
 |----------|--------|-----------------|
 | `publication_database` | SQLite | Patent publication metadata — titles, abstracts, dates, CPC codes, citations |
 | `CPCDefinition_database` | PostgreSQL | Hierarchical CPC code definitions and titles |
+
+If you see tool errors like `Unknown SQLite db_name 'publication_database'. Available: []`:
+- Treat it as a **run wiring/config registration** failure (the dataset config wasn’t loaded), not a query mistake.
+- Fail fast and avoid repeated tool calls; they will all fail until the harness/MCP registers the correct `db_config.yaml`.
 
 ---
 
@@ -80,6 +90,10 @@ All date fields (`publication_date`, `filing_date`, `grant_date`, `priority_date
 ### CPC Hierarchy
 CPC codes are hierarchical. A query about a category may require matching at a parent level, not just exact symbol match. Use `level` and `parents` fields in `cpc_definition` to navigate up the hierarchy.
 
+### CPC symbol emission
+
+When the final answer must name a CPC code, emit the **exact** `symbol` string from `cpc_definition` or from parsed `publicationinfo.cpc` entries (same characters and punctuation as stored). Join to `cpc_definition` when you need the canonical form.
+
 ### Patent Key Identifiers
 `Patents_info` is a natural language field — application number, publication number, assignee, and country code are embedded in the text, not separate columns. Use regex to extract them when needed.
 
@@ -95,6 +109,7 @@ CPC codes are hierarchical. A query about a category may require matching at a p
 2. Left-join parsed symbols to `cpc_definition.symbol`.
 3. Prefer `titleFull` for semantic grouping; use `level` to control granularity.
 4. Keep unmatched symbols in diagnostics output to detect definition-table gaps.
+5. For final output, emit canonical CPC symbols/titles exactly as stored in source rows (no paraphrase of section labels).
 
 ### 2) Time-window analysis (filing/publication/grant)
 1. Normalize date strings with deterministic parsing (month-name + ordinal support).
@@ -106,6 +121,7 @@ CPC codes are hierarchical. A query about a category may require matching at a p
 1. Extract candidate fields from `Patents_info` via regex (application, publication, assignee, country).
 2. Materialize extraction results as temporary structured columns.
 3. Validate extraction coverage before computing aggregates.
+4. Emit CPC/section labels and assignee/theme strings exactly as stored in source fields (preserve punctuation such as semicolons).
 
 ---
 

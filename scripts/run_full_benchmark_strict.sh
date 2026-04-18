@@ -7,29 +7,45 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 DAB_ROOT="${DAB_ROOT:-$REPO_ROOT/DataAgentBench}"
-MODEL="${MODEL:-openai/gpt-4o-mini}"
+# Default OpenAI model (strong planning for harder DAB queries).
+# Cost-conscious: MODEL=gpt-4.1-mini
+# Cheaper baseline: MODEL=gpt-4o-mini
+MODEL="${MODEL:-gpt-4.1}"
 TIMEOUT="${TIMEOUT:-240}"
+# Optional agent tuning (see agent/data_agent.py): ORACLE_FORGE_MAX_ITERATIONS, ORACLE_FORGE_TOOL_PREVIEW_ROWS
 SCORE_LOG="${SCORE_LOG:-$REPO_ROOT/eval/score_log_strict_no_leakage.json}"
 SUMMARY_MD="${SUMMARY_MD:-$REPO_ROOT/results/score_summary_strict_no_leakage.md}"
 RESET_LOG="${RESET_LOG:-1}"
 
-DATASETS=(
-  agnews
-  bookreview
-  crmarenapro
-  DEPS_DEV_V1
-  GITHUB_REPOS
-  googlelocal
-  music_brainz_20k
-  PANCANCER_ATLAS
-  PATENTS
-  stockindex
-  stockmarket
-  yelp
-)
-
 export ORACLE_FORGE_STRICT_NO_LEAKAGE=1
-export OPENROUTER_MODEL="$MODEL"
+
+# Prefer OpenAI in strict mode (override with ORACLE_FORGE_LLM_PROVIDER=openrouter if needed)
+export ORACLE_FORGE_LLM_PROVIDER="${ORACLE_FORGE_LLM_PROVIDER:-openai}"
+export OPENAI_MODEL="$MODEL"
+
+# Keep OpenRouter var for compatibility/logging.
+if [[ "$MODEL" == openai/* ]]; then
+  export OPENROUTER_MODEL="$MODEL"
+else
+  export OPENROUTER_MODEL="openai/$MODEL"
+fi
+
+# Strong default tuning for hard benchmark runs.
+export ORACLE_FORGE_MAX_ITERATIONS="${ORACLE_FORGE_MAX_ITERATIONS:-28}"
+export ORACLE_FORGE_TOOL_PREVIEW_ROWS="${ORACLE_FORGE_TOOL_PREVIEW_ROWS:-120}"
+
+# Discover datasets from DAB_ROOT/query_* folders (preserves on-disk case).
+if [[ ! -d "$DAB_ROOT" ]]; then
+  echo "ERROR: DAB root not found: $DAB_ROOT" >&2
+  exit 1
+fi
+mapfile -t DATASETS < <(
+  cd "$DAB_ROOT"
+  for d in query_*; do
+    [[ -d "$d" ]] || continue
+    echo "${d#query_}"
+  done | sort
+)
 
 echo "== Oracle Forge Strict Benchmark Runner =="
 echo "repo:       $REPO_ROOT"
@@ -52,12 +68,18 @@ fi
 for ds in "${DATASETS[@]}"; do
   echo
   echo "--- Running dataset: $ds ---"
+  set +e
   python3 eval/harness.py \
     --dataset "$ds" \
     --agent-module agent.data_agent \
     --dab-root "$DAB_ROOT" \
     --timeout "$TIMEOUT" \
     --score-log "$SCORE_LOG"
+  rc=$?
+  set -e
+  if [[ "$rc" != "0" ]]; then
+    echo "[strict-runner] WARNING: harness failed for dataset '$ds' (exit=$rc). Continuing." >&2
+  fi
 done
 
 echo

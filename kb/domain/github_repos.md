@@ -13,6 +13,11 @@ Two active databases. Repository metadata lives in SQLite, repository artifacts 
 | `metadata_database` | SQLite | Languages, licenses, watch counts per repo |
 | `artifacts_database` | DuckDB | File contents, commits, file-level metadata |
 
+Important routing rule:
+- `languages`, `licenses`, `repos` live in **SQLite** (`metadata_database`) only.
+- `contents`, `commits`, `files` live in **DuckDB** (`artifacts_database`) only.
+- If you query `languages` in DuckDB and see a `Catalog Error`, you used the wrong `db_name`.
+
 ---
 
 ## Schema Reference
@@ -99,6 +104,14 @@ Two active databases. Repository metadata lives in SQLite, repository artifacts 
 ### repo_data_description
 `contents.repo_data_description` is a natural language field derived from file attributes (size, binary, copies, mode). Use substring or regex matching to filter on file attributes — not direct field access.
 
+### Ratios and numeric checks
+
+Validators often search for a decimal that **rounds** to a target at fixed precision. Compute the ratio from explicit filtered counts on the same population, then emit the numeric result with enough digits that rounding matches the checker (commonly two decimal places).
+Do not convert a computed decimal into alternative forms (fraction text, prose explanation) unless explicitly requested.
+
+### Repository path token fidelity
+When final answers require repo identifiers, emit exact `owner/repo` strings copied from source rows. Do not paraphrase, shorten, or alter separators/case.
+
 ---
 
 ## Query Strategy Playbook
@@ -127,6 +140,7 @@ Two active databases. Repository metadata lives in SQLite, repository artifacts 
 - Counting files after joining contents in a way that duplicates rows.
 - Treating truncated `content` as complete source text.
 - Confusing `watch_count` semantics with stars/forks.
+- Mixing up engines: querying SQLite-only tables in DuckDB (or vice versa) because both use SQL.
 - Ignoring `difference_truncated` and over-trusting commit-level change statistics.
 
 ---

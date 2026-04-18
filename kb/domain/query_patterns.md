@@ -46,6 +46,8 @@ db.collection.aggregate([
 ## Pattern 3: DuckDB Analytical SQL
 DuckDB supports advanced analytical SQL beyond standard PostgreSQL.
 
+**Reserved names as columns:** If a table has a column literally named `FILTER` (common in mutation VCF-style data), compare with quotes: `"FILTER" = 'PASS'`.
+
 ```sql
 -- Window functions for running totals
 SELECT ticker, date,
@@ -68,6 +70,12 @@ SELECT * FROM read_csv_auto('file.csv');
 
 ## Pattern 4: PostgreSQL Queries
 Standard SQL with PostgreSQL-specific features.
+
+**Mixed-case / camelCase columns:** PostgreSQL lowercases unquoted identifiers. If a column was created as `titleFull`, `titlePart`, or `childGroups`, you **must** quote it in SQL:
+
+```sql
+SELECT symbol, "titleFull", "titlePart" FROM cpc_definition WHERE level = 4;
+```
 
 ```sql
 -- ILIKE for case-insensitive text search
@@ -295,3 +303,81 @@ render = format_required_token(dt)  # e.g., month-name token
 ```
 
 This prevents correct computation with validator-incompatible final text.
+
+## Pattern 21: Two-stage rank-then-restrict
+Many prompts implicitly chain two objectives: (A) find the group or entity that **maximizes a count or coverage**, then (B) compute a **different statistic** for that winner only.
+
+```
+1. On the full eligible population, compute the ranking metric for each group (state, category bucket, etc.).
+2. Identify the single winning group (break ties with a stable secondary key).
+3. Restrict all data for step (B) to rows/documents belonging to that winning group only.
+4. Emit the step (B) result — do not mix in global aggregates.
+```
+
+Skipping step 3 is a common source of plausible but wrong numeric answers.
+
+## Pattern 22: Schema-first recovery from DuckDB binder/catalog errors
+When a DuckDB query fails with `Binder Error` or `Catalog Error`, stop guessing and do schema discovery.
+
+```sql
+-- Discover tables
+SHOW TABLES;
+
+-- Inspect columns (copy identifiers exactly; quote mixed-case names)
+DESCRIBE some_table;
+
+-- Alternative: list columns via information_schema
+SELECT table_name, column_name
+FROM information_schema.columns
+WHERE table_schema = 'main'
+ORDER BY table_name, ordinal_position;
+```
+
+Rules:
+- Treat “Candidate bindings” in binder errors as the authoritative list of usable columns.
+- If the table should be in SQLite but fails in DuckDB, you’re in the wrong `db_name` (engine mismatch).
+
+## Pattern 23: Exact metrics only (never extrapolate from capped previews)
+Tool outputs may be capped; never compute “approximate” answers from partial previews.
+
+```
+If validator expects an exact value:
+  - compute it with COUNT/SUM/AVG over the full eligible set, or
+  - materialize the full eligible ID set, classify all of it, then count exactly.
+Never:
+  - “sample 80 rows”, “assume representative”, “estimate from preview”.
+```
+
+## Pattern 24: Engine mismatch detection (SQLite vs DuckDB vs Postgres vs Mongo)
+Many failures are simply the right SQL sent to the wrong engine/database.
+
+Heuristic:
+- If you see `Binder Error` / `Catalog Error` → DuckDB.
+- If you see `no such table` / `near "ILIKE"` → SQLite.
+- If you see `permission denied` / `relation ... does not exist` → PostgreSQL.
+- If you see JSON parsing / pipeline operator errors → MongoDB.
+
+Correction:
+- Re-check the dataset’s DATABASE DESCRIPTION for the correct logical `db_name`.
+- Run a tiny sanity query (`SELECT 1`, `SHOW TABLES`, `LIMIT 1`) before the full query.
+
+## Pattern 25: Final output should be value-first, not explanation-first
+Many strict validator misses come from verbose narrative responses.
+
+```
+Before return_answer:
+1. Identify expected shape: scalar | token | list | pair.
+2. Keep only the final payload in output text.
+3. Remove analysis, caveats, and "based on sample" commentary.
+```
+
+If uncertainty remains, still return the best evidence-backed compact value instead of a long refusal paragraph.
+
+## Pattern 26: Exact token copy for labels/codes
+For entity names, taxonomy labels, repo paths, CPC/histology codes, and IDs, token fidelity matters.
+
+```
+1. Select winner rows via SQL/aggregation.
+2. Render output tokens by direct copy from selected row fields.
+3. Do not normalize punctuation/case/pluralization in final render.
+```

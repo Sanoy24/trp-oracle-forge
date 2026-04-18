@@ -8,6 +8,16 @@ This document is injected into the agent's Domain Knowledge context layer before
 
 Two active databases. Package metadata lives in SQLite, project information and package-to-project mappings live in DuckDB.
 
+### Tool connection names (read before any query)
+
+- `query_duckdb` / `query_sqlite` take **`db_name` values exactly as declared** in `db_config.yaml` / DATABASE DESCRIPTION (e.g. `project_database`, `package_database`).
+- **Never** pass a SQL **table name** (such as `project_packageversion`) or a bare file name as `db_name` — the toolbox only knows logical connection labels. Tables are queried **inside** the chosen connection: `SELECT … FROM project_packageversion …` with `db_name='project_database'`.
+- If a tool error lists “Available: [ … ]”, you **must** choose one of those strings.
+
+### “Latest” / “most recent” version per package
+
+- Filter to release-like rows using `VersionInfo` / version ordering as appropriate, then pick the **maximum version per `(System, Name)`** with a window or grouped subquery — do not `GROUP BY` with stray projected columns that DuckDB rejects; use `arg_max`-style patterns or subqueries.
+
 | Database | Format | What it contains |
 |----------|--------|-----------------|
 | `package_database` | SQLite | Software package metadata — licenses, versions, dependencies, advisories |
@@ -88,6 +98,13 @@ Do not skip steps — there is no direct link between `packageinfo` and `project
 ### GitHub Stars and Fork Count
 Stars and fork count are embedded inside `project_info.Project_Information` as natural language text — they are not separate columns. Use regex to extract numeric values.
 
+### DuckDB schema note: `project_info` has no explicit `ProjectName`
+`project_info` does **not** expose `ProjectName` as a standalone column. When you need to connect a `ProjectName` (from `project_packageversion`) to rows in `project_info`, you must:
+- Extract the `owner/repo` token from `Project_Information` (regex) and join on that extracted value, or
+- Filter `project_info.Project_Information` with `LIKE '%owner/repo%'` for a small candidate set, then extract numeric fields.
+
+Do not guess columns like `ProjectName` in `project_info`; DuckDB will throw binder errors.
+
 ### Timestamps
 `UpstreamPublishedAt` is a Unix timestamp in **milliseconds** — divide by 1000 to get seconds before converting to a date.
 
@@ -102,9 +119,9 @@ Stars and fork count are embedded inside `project_info.Project_Information` as n
 ## Query Strategy Playbook
 
 ### 1) Package-to-project attribution
-1. Normalize `(System, Name, Version)` in both sources (trim/case policy).
-2. Join `packageinfo` to `project_packageversion` on all three fields.
-3. Join resulting `ProjectName` to `project_info`.
+1. Run **SQLite** `packageinfo` queries first to get `(System, Name, Version)` rows that satisfy filters (license, release flags, etc.).
+2. For each candidate tuple, query **DuckDB** `project_packageversion` — you cannot reference `packageinfo` inside a DuckDB `query_duckdb` call.
+3. Join resulting `ProjectName` to `project_info` in DuckDB using real column names (`Project_Information`, not guessed names).
 4. Track unmatched package versions separately.
 
 ### 2) Security and license analysis
@@ -126,6 +143,7 @@ Stars and fork count are embedded inside `project_info.Project_Information` as n
 - Treating JSON-like text fields as plain strings for exact equality filters.
 - Forgetting ms→s conversion for `UpstreamPublishedAt`.
 - Aggregating project metrics without first deduplicating package-version rows.
+- Returning incomplete project/package names (token truncation) instead of exact `owner/repo` or package strings from selected rows.
 
 ---
 
@@ -136,6 +154,7 @@ Stars and fork count are embedded inside `project_info.Project_Information` as n
 - Timestamp sanity: min/max converted dates are plausible.
 - Advisory parsing: malformed JSON-like row count reported.
 - Rollup sanity: verify project-level totals against sampled package-version detail.
+- Top-N contract: when prompt asks for 5 (or N), verify final rendered list has exactly N items after dedupe.
 
 ---
 
