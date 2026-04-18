@@ -28,6 +28,8 @@ When a query fails or stalls, find your symptom and jump to the referenced entry
 | Different runs return different winners | **036** |
 | Agent abstains despite non-empty tool results | **046** |
 | Final answer is None / null / N/A | **047** |
+| `query_postgres()` / `query_duckdb()` called inside another engine's SQL | **048** |
+| Column "x" does not exist — schema assumed not discovered | **049** |
 
 ---
 
