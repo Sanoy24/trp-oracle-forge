@@ -45,3 +45,36 @@
   Note: Commenter mentioned routing exploration vs execution — potential intelligence for IOs
   Link: https://www.reddit.com/r/LocalLLaMA/comments/1smbt8u/comment/ogd77gk/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
 
+## April 16, 2026
+- **Reddit post** — r/learnmachinelearning
+  Link: https://www.reddit.com/r/learnmachinelearning/comments/1sn4nzf/real_failure_modes_we_hit_building_a/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+  
+## April 16, 2026
+- **Reddit post** — r/OpenSourceeAI
+  Link: https://www.reddit.com/r/OpenSourceeAI/comments/1sni7zc/real_failure_modes_we_hit_building_a/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+    
+## April 16, 2026
+- **Reddit reply** — r/learnmachinelearning
+  Response to comment about trailing spaces and arbitrary location format mismatches
+  Note: Real production examples of ill-formatted join key problem — validates DAB's benchmark design
+  Link: https://www.reddit.com/r/learnmachinelearning/comments/1sn4nzf/comment/oglx94g/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+  
+## April 16, 2026
+- **Community intelligence** — Kudra AI practitioner
+  r/learnmachinelearning reply on production failure modes Flagged to team: pre-extraction schema inference as potentially more adaptive alternative to our manual join key mapping approach
+Link: https://www.reddit.com/r/learnmachinelearning/comments/1sn4nzf/comment/ogry025/?utm_[…]m=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+
+## April 17, 2026
+- **Reddit reply** — r/learnmachinelearning
+  Response to Kudra AI practitioner on silent failure modes and pre-extraction schema inference
+  Note: Kudra AI building production financial doc pipelines — relevant company to follow
+  Link: https://www.reddit.com/r/learnmachinelearning/comments/1sn4nzf/comment/ogspvej/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+   
+## April 17, 2026
+- **Medium article published** — Context Engineering Is Not Prompt Engineering — Here Is the Difference
+  Link: https://medium.com/@zumihibet2/context-engineering-is-not-prompt-engineering-here-is-the-difference-fd1cca2fd971
+
+- **LinkedIn post** — sharing Medium article
+  Link: https://www.linkedin.com/posts/zemzem-hibet_context-engineering-is-not-prompt-engineering-activity-7451060743824711680-wSWk?utm_source=share&utm_medium=member_desktop&rcm=ACoAACoQ5tYBk-I7qgTdzeo9LHdyyk2Fl0QNAIM
+
+
