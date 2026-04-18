@@ -10,3 +10,9 @@
   @tanmaigo, @rakyll @karpathy
 - **Infrastructure** — Cloudflare Workers free tier confirmed, 
   signal/ directory created in repo
+
+## April 16, 2026
+- **Joined** r/learnmachinelearning — https://reddit.com/r/LocalLLaMA
+- **Joined** r/OpenSourceeAI — https://reddit.com/r/OpenSourceAI
+- **Joined** r/dataengineering — https://reddit.com/r/dataengineering
+
