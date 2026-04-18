@@ -11,8 +11,21 @@
 - **Infrastructure** — Cloudflare Workers free tier confirmed, 
   signal/ directory created in repo
 
+## April 15, 2026
+- **Reddit reply** — r/LocalLLaMA
+  Response to routing exploration vs execution comment
+  https://www.reddit.com/r/LocalLLaMA/comments/1smbt8u/comment/ogd77gk/
+
 ## April 16, 2026
-- **Joined** r/learnmachinelearning — https://reddit.com/r/LocalLLaMA
-- **Joined** r/OpenSourceeAI — https://reddit.com/r/OpenSourceAI
+- **Joined** r/learnmachinelearning — https://reddit.com/r/learnmachinelearning
+- **Joined** r/OpenSourceAI — https://reddit.com/r/OpenSourceAI
 - **Joined** r/dataengineering — https://reddit.com/r/dataengineering
 
+## April 16, 2026
+- **Reddit reply** — r/learnmachinelearning
+  Response to trailing spaces / location format comment
+  https://www.reddit.com/r/learnmachinelearning/comments/1sn4nzf/comment/oglx94g/
+
+- **Reddit reply** — r/learnmachinelearning
+  Response to Kudra AI pre-extraction schema inference comment
+  https://www.reddit.com/r/learnmachinelearning/comments/1sn4nzf/comment/ogspvej/
